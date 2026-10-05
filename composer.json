@@ -2,12 +2,13 @@
     "name": "haeflimi/credit_manager",
     "type": "concrete5-package",
     "require": {
-        "php": ">=5.3.3",
-        "composer/installers": "^1.0.7",
-        "paypal/paypal-checkout-sdk": "~1.0.0"
+        "php": ">=8",
+        "concrete5/core": ">=9",
+        "paypal/paypal-checkout-sdk": "~1.0.0",
+        "payrexx/payrexx": "^1.8.11"
     },
     "minimum-stability": "dev",
     "support": {
-        "source": "https://github.com/haeflimi/credit_manager"
+        "source": "https://github.com/haeflimi/concretecms-credit_manager"
     }
 }

@@ -29,7 +29,6 @@ class CreditManager extends DashboardPageController
     public function view()
     {
         $ul = new CmUserList();
-        $this->requireAsset('core/topics');
         $this->requireAsset('select2');
         $relevant_groups = Config::get('credit_manager.relevant_groups');
         $relevant_groups['all'] = 'Alle';
@@ -47,6 +46,10 @@ class CreditManager extends DashboardPageController
         $ul->sortByUserName();
         $this->set('userList', $ul->getResults());
         $this->set('ul', $ul);
+        $this->set('selectedGroup', $selectedGroup);
+        $this->set('keywords', $keywords);
+        $this->set('mId', '');
+        $this->set('errors', null);
 
         $site = Site::getSite();
         $balance = $site->getAttribute('balance');

@@ -44,10 +44,10 @@ $nh = Core::make('helper/navigation'); ?>
                     <span class="badge badge-primary" data-categoryId="<?=$c->getCategoryId()?>"><?=$c->getCategoryName()?></span>
                     <?php endforeach; ?>
                 </td>
-                <td class="text-right"><?=$product->getPrice()?></td>
+                <td class="text-right"><?=number_format($product->getPrice(), 2)?></td>
                 <td class="text-right">
                     <div class="pull-right">
-                        <a href="<?=$this->action('deleteProduct', $product->getId())?>" class="btn btn-danger btn-sm mr-3"><i class="fa fa-trash"></i></a>
+                        <a href="<?=$this->action('deleteProduct', $product->getId())?>?ccm_token=<?=urlencode($deleteToken)?>" onclick="return window.confirm('<?=t('Delete this product?')?>');" class="btn btn-danger btn-sm mr-3"><i class="fa fa-trash"></i></a>
                         <a href="#" data-button="edit_product" data-pid="<?=$product->getId()?>" class="btn btn-primary btn-sm"><i class="fa fa-edit"></i></a>
                     </div>
                 </td>

@@ -1,109 +1,113 @@
 <?php
 namespace Concrete\Package\CreditManager\Controller\SinglePage;
 
-use Application\Turicane\CurrentLan;
 use Concrete\Core\Http\Response;
 use Concrete\Core\Page\Controller\PageController;
+use Concrete\Core\Support\Facade\Config;
 use Concrete\Core\Support\Facade\Database;
 use Concrete\Core\User\User;
-use Concrete\Core\User\UserList;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Order\Order;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Order\OrderList;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Order\OrderStatus\OrderStatus;
-use Concrete\Package\CommunityStore\Src\CommunityStore\Product\Product;
+use CreditManager\Controller\DashboardDialog;
 use CreditManager\CreditManager;
+use CreditManager\Service\EventContext;
 use Core;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
+/**
+ * Catering order desk: moves Community Store orders of the event from open to ordered to delivered; delivering
+ * charges the customer's account. Only users with Credit Manager dashboard access may use it.
+ */
 class OrderManagement extends PageController
 {
+    const TOKEN = 'order_management';
+
+    public function canAccess()
+    {
+        return DashboardDialog::userCanManage();
+    }
+
+    public function validateRequest()
+    {
+        $response = parent::validateRequest();
+        if ($response !== true) {
+            return $response;
+        }
+        if ($this->canAccess()) {
+            return true;
+        }
+        $user = $this->app->make(User::class);
+        if (!$user->isRegistered()) {
+            return $this->buildRedirect((string) $this->app->make('url/manager')->resolve(['/login']) . '?rcID=' . (int) $this->getPageObject()->getCollectionID());
+        }
+        $this->replace('/page_forbidden');
+        return true;
+    }
+
     public function view()
     {
         $this->requireAsset('javascript', 'vue');
         $this->requireAsset('javascript', 'slimScroll');
-        $this->set('ccm_token', json_encode(Core::make('token')->generate('order_management')));
+        $this->set('ccm_token', json_encode(Core::make('token')->generate(self::TOKEN)));
         $this->set('orderGetAction', $this->action('getOrders'));
         $this->set('orderSetOrderedAction', $this->action('setOrdered'));
         $this->set('orderSetDeliveredAction', $this->action('setDelivered'));
         $this->set('orderSetClosedAction', $this->action('setClosed'));
-        $this->setThemeViewTemplate('blank.php');
+        $this->setThemeViewTemplate((string) (Config::get('credit_manager.fullscreen_template') ?: 'blank.php'));
     }
 
     public function getOrders()
     {
-        $token = \Core::make("token");
-        if (!$token->validate('order_management')) {
+        if (!$this->validateActionRequest()) {
             return new Response('Invalid Request Token.', 401);
         }
 
         $orderList = new OrderList();
         $orderList->setCancelled(false);
-        $orderObjects = $orderList->getResults();
 
         $statusMap = [
             'incomplete' => 'Offen',
             'processing' => 'Bestellt',
-            'delivered' => 'Ausgeliefert'
+            'delivered' => 'Ausgeliefert',
         ];
+        $eventPageId = EventContext::getEventPageId();
 
         $orders = [];
-        foreach ($orderObjects as $oo) {
-            if (!is_object($oo)) {
+        foreach ($orderList->getResults() as $oo) {
+            if (!is_object($oo) || $oo->getAttribute('standing')) {
                 continue;
             }
-
-            $standing = $oo->getAttribute('standing');
-            if ($standing) {
-                continue;
-            }
-
-            if (class_exists(CurrentLan::class) && !empty(CurrentLan::$lanPageId)) {
-                $eventId = $oo->getAttribute('event_id');
-                if (is_object($eventId) && method_exists($eventId, 'getCollectionID')) {
-                    $eventId = $eventId->getCollectionID();
-                } elseif (is_object($eventId) && method_exists($eventId, 'getValue')) {
-                    $eventId = $eventId->getValue();
-                }
-
-                if ($eventId !== null && $eventId !== '' && (string)$eventId !== (string)CurrentLan::$lanPageId) {
+            if ($eventPageId) {
+                $eventId = CreditManager::attributeValue($oo->getAttribute('event_id'));
+                if ($eventId !== null && $eventId !== '' && (string) $eventId !== (string) $eventPageId) {
                     continue;
                 }
             }
-
             $statusHandle = $oo->getStatusHandle();
-            if ($oo->getPaid() || in_array($statusHandle, ['delivered'])) {
+            if ($oo->getPaid() || $statusHandle === 'delivered') {
                 continue;
             }
 
-            $productNames = [];
             $productIds = [];
             foreach ($oo->getOrderItems() as $item) {
-                $qty = (int)$item->getQuantity();
-                $name = $item->getProductName();
-                $productNames[] = $qty > 1 ? ($qty . 'x ' . $name) : $name;
                 $productIds[] = $item->getProductID();
             }
-            $productName = !empty($productNames) ? implode(', ', $productNames) : t('Kein Produkt');
-            $productId = !empty($productIds) ? $productIds[0] : 0;
-
-            $cID = $oo->getCustomerID();
             $userName = '';
+            $cID = $oo->getCustomerID();
             if ($cID) {
                 $user = User::getByUserID($cID);
                 if ($user) {
                     $userName = $user->getUserName();
                 }
             }
-
-            $statusDisplay = $statusMap[$statusHandle] ?? ($oo->getStatus() ?: ucfirst($statusHandle));
-
             $orders[] = [
                 'id' => $oo->getOrderID(),
-                'product_name' => $productName,
-                'product_id' => $productId,
-                'value' => (float)$oo->getTotal(),
+                'product_name' => $this->describeItems($oo, t('Kein Produkt')),
+                'product_id' => !empty($productIds) ? $productIds[0] : 0,
+                'value' => (float) $oo->getTotal(),
                 'user_name' => $userName,
-                'status' => $statusDisplay,
+                'status' => $statusMap[$statusHandle] ?? ($oo->getStatus() ?: ucfirst((string) $statusHandle)),
                 'status_handle' => $statusHandle,
             ];
         }
@@ -117,78 +121,104 @@ class OrderManagement extends PageController
 
     public function setOrdered()
     {
-        $selected_orders = $this->post('selected_orders');
-        $token = \Core::make("token");
-        if (!$token->validate('order_management')) {
+        if (!$this->validateActionRequest()) {
             return new Response('Invalid Request Token.', 401);
         }
-
-        if (empty($selected_orders) || !is_array($selected_orders)) {
+        $selected = $this->post('selected_orders');
+        if (empty($selected) || !is_array($selected)) {
             return new Response('0 Bestellungen auf "Bestellt" gesetzt');
         }
-
         $orderedStatus = OrderStatus::getByHandle('processing');
         $orderedStatusHandle = $orderedStatus ? $orderedStatus->getHandle() : 'processing';
         $n = 0;
-        foreach ($selected_orders as $soId) {
-            $order = Order::getByID($soId);
-            if ($order) {
-                $currentStatus = $order->getStatusHandle();
-                if (in_array($currentStatus, ['incomplete'])) {
-                    $order->updateStatus($orderedStatusHandle);
-                    $n++;
-                }
+        foreach ($selected as $soId) {
+            $order = Order::getByID((int) $soId);
+            if ($order && $order->getStatusHandle() === 'incomplete') {
+                $order->updateStatus($orderedStatusHandle);
+                $n++;
             }
         }
-
         return new Response($n . ' Bestellungen auf "Bestellt" gesetzt');
     }
 
+    /**
+     * Delivers the selected orders and charges them. Each order is handled in its own transaction with the order
+     * row locked, and the charge carries the order id as reference, so an order can never be charged twice, not
+     * even by two clerks clicking at the same moment.
+     */
     public function setDelivered()
     {
-        $selected_orders = $this->post('selected_orders');
-        $token = \Core::make("token");
-        if (!$token->validate('order_management')) {
+        if (!$this->validateActionRequest()) {
             return new Response('Invalid Request Token.', 401);
         }
-
-        if (empty($selected_orders) || !is_array($selected_orders)) {
+        $selected = $this->post('selected_orders');
+        if (empty($selected) || !is_array($selected)) {
             return new Response('0 Bestellungen auf "Ausgeliefert" gesetzt und verrechnet.');
         }
-
         $deliveredStatus = OrderStatus::getByHandle('delivered');
         $deliveredStatusHandle = $deliveredStatus ? $deliveredStatus->getHandle() : 'delivered';
+        $lanTitle = EventContext::getEventTitle();
+        $db = Database::connection();
+        $em = $db->getEntityManager();
+
         $n = 0;
-        foreach ($selected_orders as $soId) {
-            $order = Order::getByID($soId);
-            if ($order) {
-                $currentStatus = $order->getStatusHandle();
-                if (in_array($currentStatus, ['processing'])) {
+        $failed = [];
+        foreach ($selected as $soId) {
+            $oID = (int) $soId;
+            if ($oID <= 0) {
+                continue;
+            }
+            try {
+                // the outcome travels by reference: Doctrine's transactional() turns a false return value into true
+                $delivered = false;
+                $em->transactional(function () use ($db, $em, $oID, $deliveredStatusHandle, $lanTitle, &$delivered) {
+                    // lock the order row for the duration of the transaction
+                    $db->executeQuery('SELECT oID FROM CommunityStoreOrders WHERE oID = ? FOR UPDATE', [$oID]);
+                    $order = Order::getByID($oID);
+                    if (!$order) {
+                        return;
+                    }
+                    $em->refresh($order);
+                    if ($order->getStatusHandle() !== 'processing') {
+                        return;
+                    }
                     $cID = $order->getCustomerID();
                     $user = $cID ? User::getByUserID($cID) : null;
-
-                    $productNames = [];
-                    foreach ($order->getOrderItems() as $item) {
-                        $qty = (int)$item->getQuantity();
-                        $name = $item->getProductName();
-                        $productNames[] = $qty > 1 ? ($qty . 'x ' . $name) : $name;
+                    if (!$user) {
+                        return;
                     }
-                    $productName = !empty($productNames) ? implode(', ', $productNames) : t('Produkt');
-
-                    if ($user) {
-                        $msg = 'Catering Auslieferung für ' . $productName . ' abgeschlossen';
-                        $lanTitle = class_exists(CurrentLan::class) ? CurrentLan::getLANTitle() : '';
-                        CreditManager::addRecord($user, -(float)$order->getTotal(), $msg, ['Catering Order', $lanTitle]);
-                        $order->setShippingMethodName('Restaurant Sammellieferung');
-                        $order->updateStatus($deliveredStatusHandle);
-                        $order->save();
-                        $n++;
-                    }
+                    $msg = 'Catering Auslieferung für ' . $this->describeItems($order, t('Produkt')) . ' abgeschlossen';
+                    CreditManager::addRecord(
+                        $user,
+                        -(float) $order->getTotal(),
+                        $msg,
+                        ['Catering Order', $lanTitle],
+                        CreditManager::SOURCE_STORE_ORDER,
+                        $oID . ':delivered'
+                    );
+                    $order->setShippingMethodName('Restaurant Sammellieferung');
+                    $order->updateStatus($deliveredStatusHandle);
+                    $order->save();
+                    $delivered = true;
+                });
+                if ($delivered) {
+                    $n++;
+                }
+            } catch (\Throwable $e) {
+                $failed[] = $oID;
+                $this->app->make('log')->error('Credit Manager: delivering order ' . $oID . ' failed: ' . $e->getMessage());
+                if (!$em->isOpen()) {
+                    // a failed transaction closes the entity manager; stop instead of working with a dead one
+                    break;
                 }
             }
         }
 
-        return new Response($n . ' Bestellungen auf "Ausgeliefert" gesetzt und verrechnet.');
+        $message = $n . ' Bestellungen auf "Ausgeliefert" gesetzt und verrechnet.';
+        if ($failed) {
+            return new Response($message . ' Fehlgeschlagen: ' . implode(', ', $failed), 500);
+        }
+        return new Response($message);
     }
 
     public function setClosed()
@@ -196,47 +226,22 @@ class OrderManagement extends PageController
         return $this->setDelivered();
     }
 
-    public function processOrder()
+    protected function validateActionRequest()
     {
-        $order = $this->post('order');
-        $token = \Core::make("token");
-        if (!$token->validate('order_management')) {
-            return new Response('Invalid Request Token.', 401);
+        if (!$this->canAccess()) {
+            return false;
         }
-        $badgeId = $order['badge_id'] ?? null;
-        if (empty($badgeId)) {
-            return new Response('No Badge Id transmitted', 401);
-        }
-        $ul = new UserList();
-        $ul->filterByAttribute('badge_id', $badgeId);
-        $user = $ul->getResults()[0] ?? null;
-        if (!is_object($user)) {
-            return new Response('No User associated to this Badge ID: ' . $badgeId, 401);
-        }
-        $items = $order['items'] ?? [];
-        if (empty($items)) {
-            return new Response('No Items selected', 500);
-        }
+        return (bool) Core::make('token')->validate(self::TOKEN);
+    }
 
-        $totalPrice = 0;
-        $itemCount = 0;
-        $itemNames = [];
-        foreach ($items as $i) {
-            $product = Product::getByID($i['id']);
-            if ($product) {
-                $totalPrice += ($i['quantity'] * $product->getPrice());
-                $itemCount += $i['quantity'];
-                $itemNames[] = $product->getName();
-            }
+    private function describeItems($order, $fallback)
+    {
+        $names = [];
+        foreach ($order->getOrderItems() as $item) {
+            $qty = (int) $item->getQuantity();
+            $name = $item->getProductName();
+            $names[] = $qty > 1 ? ($qty . 'x ' . $name) : $name;
         }
-        $message = $itemCount . ' Produkte gekauft: (' . implode(' ,', $itemNames) . ')';
-        $lanName = class_exists(CurrentLan::class) ? CurrentLan::getLANTitle() : '';
-        try {
-            CreditManager::addRecord($user, -$totalPrice, $message, ['Catering POS', $lanName]);
-        } catch (\Throwable $e) {
-            return new Response("Failed: " . $e->getMessage(), 500);
-        }
-
-        return new Response('Transaktion Erfolgreich');
+        return !empty($names) ? implode(', ', $names) : $fallback;
     }
 }

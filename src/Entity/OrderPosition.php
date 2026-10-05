@@ -1,18 +1,14 @@
 <?php
 namespace CreditManager\Entity;
 
-use Concrete\Core\Support\Facade\Database;
-use Concrete\Core\Tree\Node\Type\Topic as TopicTreeNode;
 use Doctrine\ORM\Mapping as ORM;
-use CreditManager\Repository\CreditRecordList;
-use Doctrine\Common\Collections\ArrayCollection;
 use User;
-use Page;
 
 /**
+ * Legacy order line for the own product catalogue; superseded by Community Store orders.
+ *
  * @ORM\Entity()
  * @ORM\Table(name="cmOrderPosition")
- *
  */
 class OrderPosition
 {
@@ -39,8 +35,8 @@ class OrderPosition
     protected $status;
 
     /**
-     * @ORM\ManyToOne(targetEntity="Product")
-     * @ORM\JoinColumn(name="product_id", referencedColumnName="Id")
+     * @ORM\ManyToOne(targetEntity="CreditManager\Entity\Product")
+     * @ORM\JoinColumn(name="product_id", referencedColumnName="Id", nullable=true, onDelete="SET NULL")
      */
     protected $product;
 
@@ -56,7 +52,7 @@ class OrderPosition
 
     public function setQuantity($qnt)
     {
-        $this->quantity = $qnt;
+        $this->quantity = (int) $qnt;
     }
 
     public function getProduct()
@@ -76,7 +72,7 @@ class OrderPosition
 
     public function setUserId($userId)
     {
-        $this->uId = $userId;
+        $this->uId = (int) $userId;
     }
 
     public function getUser()
@@ -100,7 +96,7 @@ class OrderPosition
             'open' => 'Offen',
             'ordered' => 'Bestellt',
             'delivered' => 'Ausgeliefert',
-            'closed' => 'Abgeschlossen'
+            'closed' => 'Abgeschlossen',
         ];
     }
 }

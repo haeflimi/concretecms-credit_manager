@@ -1,16 +1,15 @@
 <?php
 namespace CreditManager\Entity;
 
+use Concrete\Core\Tree\Node\Node as TreeNode;
 use Concrete\Core\Tree\Node\Type\Topic as TopicTreeNode;
 use Doctrine\ORM\Mapping as ORM;
-use CreditManager\Repository\CreditRecordList;
-use User;
-use Page;
 
 /**
+ * Tag of a legacy product with a topic tree node.
+ *
  * @ORM\Entity()
  * @ORM\Table(name="cmProductCategory")
- *
  */
 class ProductCategory
 {
@@ -21,43 +20,39 @@ class ProductCategory
     protected $pId;
 
     /**
-     * Node Id for the c5 Topics Attribute Entry
+     * Node Id of the topic tree node used as category.
+     *
      * @ORM\Id
      * @ORM\Column(type="integer")
      */
     protected $nodeId;
 
-    public function __construct(Product $p, TopicTreeNode $t) {
-        $this->pId = $p->getId();
-        $this->nodeId = $t->getTreeNodeID();
-        return $this;
+    /**
+     * @param Product $p
+     * @param TopicTreeNode|int $node
+     */
+    public function __construct(Product $p, $node)
+    {
+        $this->pId = (int) $p->getId();
+        $this->nodeId = $node instanceof TreeNode ? (int) $node->getTreeNodeID() : (int) $node;
     }
 
-    public function getCreditRecordId(){
-        return $this->crId;
+    public function getProductId()
+    {
+        return (int) $this->pId;
     }
 
-    public function getCreditRecord(){
-        return CreditRecord::getById($this->crId);
+    public function getCategoryId()
+    {
+        return (int) $this->nodeId;
     }
 
-    public function getCategoryId(){
-        return $this->nodeId;
-    }
-
-    public function getCategoryName(){
-        $t = TopicTreeNode::getById($this->nodeId);
-        if(is_object($t)){
+    public function getCategoryName()
+    {
+        $t = TopicTreeNode::getByID($this->nodeId);
+        if (is_object($t)) {
             return $t->getTreeNodeDisplayName();
         }
         return '';
-    }
-
-    public function setRecord(CreditRecord $cr){
-        $this->crId = $cr->getId();
-    }
-
-    public function setCategory($nodeId){
-        $this->nodeId = $nodeId;
     }
 }

@@ -1,19 +1,17 @@
 <?php
 namespace CreditManager\Entity;
 
-use Concrete\Core\Support\Facade\Database;
-use Concrete\Core\Tree\Node\Type\Topic as TopicTreeNode;
-use Doctrine\ORM\Mapping as ORM;
-use CreditManager\Repository\CreditRecordList;
-use Doctrine\Common\Collections\ArrayCollection;
 use Concrete\Core\File\File;
-use User;
-use Page;
+use Concrete\Core\Support\Facade\Database;
+use CreditManager\Service\CategoryResolver;
+use Doctrine\ORM\Mapping as ORM;
 
 /**
+ * Legacy own product catalogue. The POS pages sell Community Store products now; this entity remains for
+ * installations that still have rows in it.
+ *
  * @ORM\Entity()
  * @ORM\Table(name="cmProduct")
- *
  */
 class Product
 {
@@ -45,23 +43,9 @@ class Product
     protected $isSelfService;
 
     /**
-     * @ORM\Column(type="float", nullable=false)
+     * @ORM\Column(type="decimal", precision=12, scale=2, nullable=false)
      */
     protected $price;
-
-    /**
-     * Any Credit Record can have any Topic Tag
-     * @ManyToMany(targetEntity="CreditManager\Entity\ProductCategory")
-     * @JoinTable(name="cmProductCategory",
-     *      joinColumns={@JoinColumn(name="Id", referencedColumnName="pId")},
-     *      inverseJoinColumns={@JoinColumn(name="pId", referencedColumnName="Id", unique=true, onDelete="CASCADE")}
-     *      )
-     */
-    protected $categorie_tags;
-
-    public function __construct() {
-        $this->categorie_tags = new ArrayCollection;
-    }
 
     public function getId()
     {
@@ -85,22 +69,28 @@ class Product
 
     public function getImage()
     {
-        return File::getByID($this->image);
+        return $this->image ? File::getByID($this->image) : null;
     }
 
     public function setImage($imageId)
     {
-        $this->image = $imageId;
+        $this->image = $imageId ? (int) $imageId : null;
     }
 
+    /**
+     * @return float
+     */
     public function getPrice()
     {
-        return $this->price;
+        return (float) $this->price;
     }
 
     public function setPrice($price)
     {
-        $this->price = $price;
+        if (!is_numeric($price)) {
+            throw new \InvalidArgumentException('The product price must be numeric.');
+        }
+        $this->price = CreditRecord::normalizeAmount($price);
     }
 
     public function getIsOrder()
@@ -110,7 +100,7 @@ class Product
 
     public function setIsOrder($isOrder)
     {
-        $this->isOrder = $isOrder;
+        $this->isOrder = (bool) $isOrder;
     }
 
     public function getIsSelfService()
@@ -120,47 +110,51 @@ class Product
 
     public function setIsSelfService($isSelfService)
     {
-        $this->isSelfService = $isSelfService;
+        $this->isSelfService = (bool) $isSelfService;
     }
 
-    public function addCategory($cat){
-        if(is_numeric($cat)){
-            $t = TopicTreeNode::getByID($cat);
-        } else {
-            $t = TopicTreeNode::getNodeByName($cat);
-        }
-        if(!is_object($t)){
+    public function addCategory($cat)
+    {
+        $nodeId = CategoryResolver::resolve($cat);
+        if (!$nodeId || !$this->getId()) {
             return $this;
         }
         $em = Database::connection()->getEntityManager();
-        $category = $em->getRepository('CreditManager\Entity\ProductCategory')->findBy(['pId'=>$this->getId(),'nodeId'=>$t->getTreeNodeId()]);
-        if(empty($category)){
-            $pc = new ProductCategory($this, $t);
-            $em->persist($pc);
+        $existing = $em->getRepository(ProductCategory::class)->findOneBy(['pId' => $this->getId(), 'nodeId' => $nodeId]);
+        if (!$existing) {
+            $em->persist(new ProductCategory($this, $nodeId));
             $em->flush();
         }
         return $this;
     }
 
-    public function addCategories($categories){
-        foreach($categories as $nodeId){
-            $this->addCategory($nodeId);
+    public function addCategories($categories)
+    {
+        foreach ((array) $categories as $cat) {
+            $this->addCategory($cat);
         }
         return $this;
     }
 
-    public function updateCategories($categories){
+    public function updateCategories($categories)
+    {
         $em = Database::connection()->getEntityManager();
-        $currentCategories = $em->getRepository('CreditManager\Entity\ProductCategory')->findBy(['pId'=>$this->getId()]);
-        foreach($currentCategories as $cC){
-            $em->remove($cC);
-            $em->flush();
+        foreach ($this->getCategories() as $current) {
+            $em->remove($current);
         }
+        $em->flush();
         $this->addCategories($categories);
     }
 
-    public function getCategories(){
+    /**
+     * @return ProductCategory[]
+     */
+    public function getCategories()
+    {
+        if (!$this->getId()) {
+            return [];
+        }
         $em = Database::connection()->getEntityManager();
-        return $em->getRepository('CreditManager\Entity\ProductCategory')->findBy(['pId'=>$this->getId()]);
+        return $em->getRepository(ProductCategory::class)->findBy(['pId' => $this->getId()]);
     }
 }

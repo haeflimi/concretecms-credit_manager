@@ -132,6 +132,7 @@ $this->inc('elements/header_top.php');  ?>
             products: <?=$products?>,
             selected_products: [],
             active_user: null,
+            cart_id: null,
             ccm_token: <?=$ccm_token?>,
         },
         methods: {
@@ -169,33 +170,21 @@ $this->inc('elements/header_top.php');  ?>
                 this.setFocus();
             },
             activateUser: function(event) {
-                if(event.target.selectedOptions){
-                    var badge_id = event.target.selectedOptions[0].value;
-                } else {
-                    var badge_id = event.target.value;
-                }
-                var user = this.users.find(user => user.badge_id === badge_id);
-                if(user){
-                    this.active_user = user;
+                var badge_id = event.target.selectedOptions ? event.target.selectedOptions[0].value : event.target.value;
+                if (!badge_id) {
                     return;
-                } else {
-                    // In case the reader cuts of the the id early, we can check if there is a unique
-                    // match anyway
-                    var maybe = this.users.filter(function(user) {
-                        if(user.badge_id){
-                            if(user.badge_id.includes(badge_id)){
-                                return true;
-                            }
-                        }
-                        return false;
-                    })
-                    if(maybe.length === 1){
-                        this.active_user = maybe[0];
-                        return;
-                    }
-                    this.alertError('Kein Benutzer mit dieser Badge Id')
-                    this.reset();
                 }
+                var self = this;
+                $.post("<?=$lookupAction?>", {badge_id: badge_id, ccm_token: this.ccm_token}, function (user) {
+                    self.active_user = user;
+                }).fail(function () {
+                    self.alertError('Kein Benutzer mit dieser Badge Id');
+                    self.reset();
+                });
+            },
+            newCartId: function() {
+                // identifies this cart on the server: a retried or double-sent checkout is booked once
+                this.cart_id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now() + '-' + Math.random().toString(16).slice(2));
             },
             setFocus: function(){
                 if(this.$refs.badgeInput){
@@ -203,6 +192,7 @@ $this->inc('elements/header_top.php');  ?>
                 }
             },
             reset: function() {
+                this.newCartId();
                 this.selected_products.splice(0, this.selected_products.length);
                 this.active_user = null;
                 this.active_alert = null;
@@ -237,9 +227,10 @@ $this->inc('elements/header_top.php');  ?>
             },
             confirm : function () {
                 var order = {
-                    items: this.selected_products,
+                    items: this.selected_products.map(function (p) { return {id: p.id, quantity: p.quantity}; }),
                     badge_id: this.active_user.badge_id,
-                    item_count: this.itemCount
+                    item_count: this.itemCount,
+                    uuid: this.cart_id
                 }
                 this.is_processing = true;
                 $.post("<?=$orderAction?>", {order,ccm_token: this.ccm_token}, function (response) {
@@ -273,6 +264,7 @@ $this->inc('elements/header_top.php');  ?>
             }
         },
         mounted: function () {
+            this.newCartId();
             this.$nextTick(function () {
                 this.setFocus();
             })

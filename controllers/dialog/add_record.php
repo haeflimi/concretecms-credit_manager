@@ -2,69 +2,73 @@
 
 namespace Concrete\Package\CreditManager\Controller\Dialog;
 
-use Concrete\Core\Controller\Controller;
-use Concrete\Core\Tree\Node\Type\Category;
-use Concrete\Core\Tree\Type\Topic as TopicTree;
+use Concrete\Core\Error\ErrorList\ErrorList;
+use Concrete\Core\User\User;
+use CreditManager\Controller\DashboardDialog;
 use CreditManager\CreditManager;
-use Concrete\Core\Tree\Node\Type\Topic as TopicTreeNode;
+use CreditManager\Service\CategoryResolver;
 use Core;
-use Config;
 use URL;
 
-class AddRecord extends Controller
+class AddRecord extends DashboardDialog
 {
     protected $viewPath = 'dialogs/add_record';
 
     public function view($uId)
     {
-        $this->requireAsset('core/topics');
         $this->requireAsset('select2');
-        $tt = new TopicTree();
-        $tree = $tt->getByID(Core::make('helper/security')->sanitizeInt(Config::get('credit_manager.categories_topic')));
-        $this->set('categoryTree',$tree);
-        $nodeIds = $tree->getRootTreeNodeObject()->getAllChildNodeIDs();
-        $nodes = [];
-        foreach($nodeIds as $key => $nodeId){
-            $node = TopicTreeNode::getByID($nodeId);
-            if($node instanceof Category)continue;
-            $nodes[$nodeId] = $node->getTreeNodeDisplayName();
-        }
-        $this->set('categoryTreeNodes', $nodes);
-        $this->set('uId', $uId);
+        $this->set('categoryTree', CategoryResolver::getTree());
+        $this->set('categoryTreeNodes', CategoryResolver::getSelectableTopics());
+        $this->set('uId', (int) $uId);
+        $this->set('bookingId', uniqid('manual_', true));
     }
 
-    public function confirm() {
+    public function confirm()
+    {
         $e = $this->validate($this->post(), 'addRecord');
-        if($e === true){
-            $value = $this->post('recordValue');
-            $comment = $this->post('recordComment');
+        if ($e === true) {
+            $uId = (int) $this->post('recordUid');
             $categories = $this->post('selectedCategories');
-            $user = $this->post('recordUid');
-            CreditManager::addRecord($user,$value,$comment,$categories);
-            $this->flash('success', t('Record Added'));
+            $bookingId = preg_replace('/[^A-Za-z0-9_.\-]/', '', (string) $this->post('bookingId'));
+            $record = CreditManager::addRecord(
+                $uId,
+                $this->post('recordValue'),
+                $this->post('recordComment'),
+                is_array($categories) ? $categories : [],
+                CreditManager::SOURCE_MANUAL,
+                $bookingId !== '' ? $bookingId : null
+            );
+            $this->flash('success', t('Record %s added for user %d', $record->getValueString(), $uId));
         } else {
             $this->flash('error', $e);
         }
         $this->redirect(URL::to('/dashboard/credit_manager'));
     }
 
+    /**
+     * @return ErrorList|true
+     */
     public function validate($data, $action = false)
     {
-        $errors = new \Concrete\Core\Error\Error();
+        $errors = new ErrorList();
 
-        // we want to use a token to validate each call in order to protect from xss and request forgery
-        $token = \Core::make("token");
-        if($action && !$token->validate($action)){
-            $errors->add('Invalid Request, token must be valid.');
+        if ($action && !Core::make('token')->validate($action)) {
+            $errors->add(t('Invalid Request, token must be valid.'));
+        }
+        if (!$this->canAccess()) {
+            $errors->add(t('Access Denied'));
         }
 
-        // validate the action addPonts
-        if($action == 'addRecord'){
-            if(!is_numeric($data['recordValue'])){
-                $errors->add('No valid Record Value set.');
+        if ($action == 'addRecord') {
+            if (!isset($data['recordValue']) || !is_numeric($data['recordValue'])) {
+                $errors->add(t('No valid Record Value set.'));
             }
-            if(empty($data['recordComment'])){
-                $errors->add('You need to set a comment for the Record.');
+            if (empty($data['recordComment'])) {
+                $errors->add(t('You need to set a comment for the Record.'));
+            }
+            $uId = isset($data['recordUid']) ? (int) $data['recordUid'] : 0;
+            if ($uId <= 0 || !User::getByUserID($uId)) {
+                $errors->add(t('Unknown user.'));
             }
         }
 

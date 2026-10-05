@@ -1,29 +1,22 @@
 <?php
 namespace CreditManager\Repository;
 
-use Concrete\Core\Search\ItemList\Database\AttributedItemList as DatabaseItemList;
-use Concrete\Core\Search\Pagination\Pagination;
+use Concrete\Core\Search\ItemList\Database\ItemList as DatabaseItemList;
 use Concrete\Core\Support\Facade\Database;
-use Package;
-use Pagerfanta\Adapter\DoctrineDbalAdapter;
+use CreditManager\Entity\CreditRecord;
 
 /**
- *
- * An object that allows a filtered list of pages to be returned.
- *
+ * Filterable list of credit records.
  */
 class CreditRecordList extends DatabaseItemList
 {
-
-    /** @var  \Closure | integer | null */
-    protected $permissionsChecker;
     /**
      * Columns in this array can be sorted via the request.
      * @var array
      */
-    protected $autoSortColumns = array(
-        'cr.timestamp'
-    );
+    protected $autoSortColumns = [
+        'cr.timestamp',
+    ];
 
     public function createQuery()
     {
@@ -37,19 +30,24 @@ class CreditRecordList extends DatabaseItemList
     }
 
     /**
-     * @param $queryRow
-     * @return \Concrete\Core\File\File
+     * @param array $queryRow
+     * @return CreditRecord|null
      */
     public function getResult($queryRow)
     {
-        $em = Database::connection()->getEntityManager();
-        return $em->getRepository('CreditManager\Entity\CreditRecord')->getById( $queryRow['Id'] );
+        return Database::connection()->getEntityManager()->find(CreditRecord::class, (int) $queryRow['Id']);
     }
 
     public function getTotalResults()
     {
-        $em = Database::connection()->getEntityManager();
-        return $em->getRepository('CreditManager\Entity\CreditRecord')->count();
+        $query = $this->deliverQueryObject();
+        return (int) $query->resetQueryParts(['groupBy', 'orderBy'])->select('count(cr.Id)')->setMaxResults(1)->execute()->fetchColumn();
+    }
+
+    public function filterByUser($user)
+    {
+        $uId = is_object($user) ? (int) $user->getUserID() : (int) $user;
+        $this->query->andWhere('cr.uId = :uId')->setParameter('uId', $uId);
     }
 
     /**
@@ -58,12 +56,11 @@ class CreditRecordList extends DatabaseItemList
      */
     public function filterByKeywords($keywords)
     {
-        $expressions = array(
-            $this->query->expr()->like('cr.timestamp', ':keywords'),
-            $this->query->expr()->like('cr.comment', ':keywords')
-        );
         $expr = $this->query->expr();
-        $this->query->andWhere(call_user_func_array(array($expr, 'orX'), $expressions));
+        $this->query->andWhere($expr->orX(
+            $expr->like('cr.timestamp', ':keywords'),
+            $expr->like('cr.comment', ':keywords')
+        ));
         $this->query->setParameter('keywords', '%' . $keywords . '%');
     }
 
@@ -74,10 +71,5 @@ class CreditRecordList extends DatabaseItemList
             ->setParameter('start', $start)
             ->setParameter('end', $end)
             ->orderBy('cr.timestamp', 'DESC');
-    }
-
-    protected function getAttributeKeyClassName()
-    {
-        return '\\Concrete\\Core\\Attribute\\Key\\CollectionKey';
     }
 }

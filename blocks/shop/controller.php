@@ -2,7 +2,6 @@
 
 namespace Concrete\Package\CreditManager\Block\Shop;
 
-use Application\Turicane\CurrentLan;
 use Concrete\Core\Block\BlockController;
 use Concrete\Core\Http\Response;
 use Concrete\Core\User\User;
@@ -14,6 +13,8 @@ use Concrete\Package\CommunityStore\Src\CommunityStore\Order\OrderStatus\OrderSt
 use Concrete\Package\CommunityStore\Src\CommunityStore\Product\Product;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductList;
 use Core;
+use CreditManager\CreditManager;
+use CreditManager\Service\EventContext;
 
 class Controller extends BlockController {
 
@@ -104,15 +105,10 @@ class Controller extends BlockController {
                   continue;
               }
 
-              if (class_exists(CurrentLan::class) && !empty(CurrentLan::$lanPageId)) {
-                  $eventId = $oo->getAttribute('event_id');
-                  if (is_object($eventId) && method_exists($eventId, 'getCollectionID')) {
-                      $eventId = $eventId->getCollectionID();
-                  } elseif (is_object($eventId) && method_exists($eventId, 'getValue')) {
-                      $eventId = $eventId->getValue();
-                  }
-
-                  if ($eventId !== null && $eventId !== '' && (string)$eventId !== (string)CurrentLan::$lanPageId) {
+              $eventPageId = EventContext::getEventPageId();
+              if ($eventPageId) {
+                  $eventId = CreditManager::attributeValue($oo->getAttribute('event_id'));
+                  if ($eventId !== null && $eventId !== '' && (string) $eventId !== (string) $eventPageId) {
                       continue;
                   }
               }
@@ -156,11 +152,12 @@ class Controller extends BlockController {
       if (!$token->validate('shop_block_order')) {
           return new Response('Invalid Request Token.', 401);
       }
-      $user = User::getByUserID($order['user_id']);
-      if(!$user){
+      // the order is always placed for the signed-in user, never for a user id sent by the browser
+      $user = new User();
+      if (!$user->isRegistered()) {
           return new Response('Invalid User.', 401);
       }
-      $product = Product::getByID($order['product_id']);
+      $product = is_array($order) && isset($order['product_id']) ? Product::getByID((int) $order['product_id']) : null;
       if(!$product){
           return new Response('Invalid Product.', 401);
       }
@@ -172,8 +169,8 @@ class Controller extends BlockController {
           $csOrder->setTotal($product->getPrice());
           $csOrder->save();
 
-          if (class_exists(CurrentLan::class) && !empty(CurrentLan::$lanPageId)) {
-              $csOrder->setAttribute('event_id', CurrentLan::$lanPageId);
+          if (EventContext::getEventPageId()) {
+              $csOrder->setAttribute('event_id', EventContext::getEventPageId());
           }
 
           $itemData = [
@@ -196,7 +193,7 @@ class Controller extends BlockController {
 
   public function action_deleteOrder() {
       $order = $this->post('order');
-      $opId = $order['order_id'];
+      $opId = is_array($order) && isset($order['order_id']) ? (int) $order['order_id'] : 0;
       $token = \Core::make("token");
       if (!$token->validate('shop_block_order')) {
           return new Response('Invalid Request Token.', 401);

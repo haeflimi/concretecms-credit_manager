@@ -162,4 +162,5 @@ class Paypal
             throw new Exception('Something went wrong when updating the User balance!');
         }
     }
+
 }

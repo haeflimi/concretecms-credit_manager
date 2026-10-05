@@ -15,14 +15,14 @@ defined('C5_EXECUTE') or die(_("Access Denied.")); ?>
     </div>
     <div class="col-md-7 col-md-offset-1 col-sm-8 col-xs-12">
 
-        <h4>Ausgleichen per Paypal</h4>
+        <h4 id="payrexx-payment">Online Zahlung</h4>
 
-        <?php if($balance<0):?>
+        <?php if($balance < 0):?>
 
             <div class="row">
                 <div class="col-xs-12 col-md-4">
                     <div id="paypal-button-container"></div>
-                    <div id="paypal-success" class="alert alert-success" style="display: none">
+                    <div id="success-message" class="alert alert-success" style="display: none">
                         <p><strong>Zahlung erfolgreich.</strong><br/>
                             Unter Umständen kann es einige Minuten dauern, bis der Kontostand auf unserer Homepage korrekt angezeigt wird. - Bitte die Zahlung NICHT wiederholen
                             und bei Unstimmigkeiten bie <a href="mailto:tuborg@turicane.ch">TuBorg</a> melden.</p>
@@ -30,42 +30,18 @@ defined('C5_EXECUTE') or die(_("Access Denied.")); ?>
                 </div>
             </div>
 
-            <script>
-                paypal.Buttons({
-                    createOrder: function(data, actions) {
-                        return actions.order.create({
-                            purchase_units: [{
-                                amount: {
-                                    value: '<?=$paypalTotal?>'
-                                },
-                                custom_id: '<?=$paypalPayload?>'
-                            }]
-                        });
-                    },
-                    onApprove: function(data, actions) {
-                        return actions.order.capture().then(function(details) {
-                            $('#paypal-success').fadeIn('slow');
-
-                            return fetch('/ccm/credit_manager/callback/verify', {
-                                method: 'post',
-                                headers: {
-                                    'content-type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    orderID: data.orderID
-                                })
-                            });
-
-                        });
-                    }
-                }).render('#paypal-button-container');
-            </script>
+            <div class="row">
+                <div class="col-12">
+                    <?=$paymentButton?>
+                    <p class="small text-muted">Via Payrexx stehen diverse Online- Zahlungsmethoden zur Verfügung.</p>
+                </div>
+            </div>
 
         <?php else:?>
             <p>
-                Die Überweisung per Paypal ist nur bei einem negativen Kontostand möglich.
+                Die Online-Überweisung ist nur bei einem negativen Kontostand möglich.
             </p>
         <?php endif?>
-    </div>
+    </p>
 </div>
 

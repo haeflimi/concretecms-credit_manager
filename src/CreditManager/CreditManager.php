@@ -4,6 +4,8 @@ namespace CreditManager;
 use Concrete\Core\Support\Facade\Database;
 use Concrete\Core\Tree\Node\Type\Topic as TopicTreeNode;
 use Concrete\Core\User\User;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Order\Order;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Order\OrderList;
 use CreditManager\Entity\CreditRecord;
 use CreditManager\Repository\CreditRecordList;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -41,7 +43,7 @@ class CreditManager
             $sum += $record->getValue();
         }
 
-        return $sum;
+        return round($sum,2);
     }
 
     public static function getUserHistory($user, $limit = 100){
@@ -83,6 +85,28 @@ class CreditManager
                 ->setParameter('nodeids', $nodeIds);
         }
         $nodeIds = [];
+        $query = $qb->getQuery();
+        return $query->getResult();
+    }
+
+    public static function getUserHistoryByDate($user, $startDate, $endDate){
+        if(is_object($user)) {
+            $uId = $user->getUserID();
+        } else {
+            $uId = $user;
+        }
+        $db = Database::connection();
+        $em = $db->getEntityManager();
+        $qb = $em->createQueryBuilder();
+        $qb->select('cr.uId, cr.comment, cr.timestamp, cr.value')
+            ->from('CreditManager\Entity\CreditRecord', 'cr')
+            ->where('cr.uId = ?1')
+            ->andWhere('cr.timestamp >= :start')
+            ->andWhere('cr.timestamp <= :end')
+            ->setParameter('start', $startDate)
+            ->setParameter('end', $endDate)
+            ->setParameter(1, $uId)
+            ->orderBy('cr.timestamp', 'DESC');
         $query = $qb->getQuery();
         return $query->getResult();
     }
@@ -142,5 +166,63 @@ class CreditManager
         $query = $qb->getQuery();
         $nodeIds = [];
         return $query->getSingleScalarResult();
+    }
+
+    public static function createCommunityStoreStandingOrder($user, $lanPageId)
+    {
+        $uID = null;
+        if (is_numeric($user)) {
+            $uID = (int) $user;
+        } elseif (is_object($user) && method_exists($user, 'getUserID')) {
+            $uID = (int) $user->getUserID();
+        }
+
+        $order = new Order();
+        if ($uID) {
+            $order->setCustomerID($uID);
+        }
+        $order->setDate(new \DateTime());
+        $order->setShippingMethodName('Self-Service');
+        $order->updateStatus('delivered');
+        $order->setTotal(0);
+        $order->save();
+
+        $order->setAttribute('event_id', $lanPageId);
+        $order->setAttribute('standing', true);
+
+        return $order;
+    }
+
+    /**
+     * Fetch all Community Store orders of the user with order attribute event_id equal to $lanPageId
+     *
+     * @param \Concrete\Core\User\UserInfo|\Concrete\Core\User\User|int $user
+     * @param int|string $lanPageId
+     * @return Order[]|null
+     */
+    public static function getCommunityStoreStandingOrder($user, $lanPageId)
+    {
+        $uID = null;
+        if (is_numeric($user)) {
+            $uID = (int) $user;
+        } elseif (is_object($user) && method_exists($user, 'getUserID')) {
+            $uID = (int) $user->getUserID();
+        }
+
+        if (!$uID) {
+            return [];
+        }
+
+        $orderList = new OrderList();
+        $orderList->setCustomerID($uID);
+        $orders = $orderList->getResults();
+        foreach ($orders as $order) {
+            $eventId = $order->getAttribute('event_id');
+            $standing = $order->getAttribute('standing');
+            if($eventId == $lanPageId && $standing == true){
+                return $order;
+            }
+        }
+        return null;
     }
 }

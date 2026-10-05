@@ -20,7 +20,7 @@ class Controller extends Package implements ProviderAggregateInterface
 {
     protected $pkgHandle = 'credit_manager';
     protected $appVersionRequired = '8.4';
-    protected $pkgVersion = '1.4.35';
+    protected $pkgVersion = '1.4.36';
     protected $pkgAutoloaderRegistries = array(
         'src/PaymentMethods' => '\CreditManager\PaymentMethods',
         'src/Entity' => '\CreditManager\Entity',
@@ -54,10 +54,13 @@ class Controller extends Package implements ProviderAggregateInterface
 
         // register routes for payment method callbacks and modal dialogs
         Route::registerMultiple(array(
+            '/ccm/credit_manager/callback/payrexx' => array('\CreditManager\PaymentMethods\Payrexx::callback'),
             '/ccm/credit_manager/callback/paypal' => array('\CreditManager\PaymentMethods\Paypal::callback'),
             '/ccm/credit_manager/callback/verify' => array('\CreditManager\PaymentMethods\Paypal::verify'),
             '/ccm/credit_manager/add_record/{uId}' => array('\Concrete\Package\CreditManager\Controller\Dialog\AddRecord::view'),
             '/ccm/credit_manager/add_record/{uId}/confirm/' => array('\Concrete\Package\CreditManager\Controller\Dialog\AddRecord::confirm'),
+            '/ccm/credit_manager/bulk_add_record' => array('\Concrete\Package\CreditManager\Controller\Dialog\BulkAddRecord::view'),
+            '/ccm/credit_manager/bulk_add_record/confirm' => array('\Concrete\Package\CreditManager\Controller\Dialog\BulkAddRecord::confirm'),
             '/ccm/credit_manager/history/{uId}' => array('\Concrete\Package\CreditManager\Controller\Dialog\History::view'),
             '/ccm/credit_manager/add_product' => array('\Concrete\Package\CreditManager\Controller\Dialog\AddProduct::view'),
             '/ccm/credit_manager/add_product/confirm' => array('\Concrete\Package\CreditManager\Controller\Dialog\AddProduct::confirm'),
@@ -72,9 +75,17 @@ class Controller extends Package implements ProviderAggregateInterface
         $al->register('css', 'datatables', 'css/datatables.css',
             array('version' => '1.10.18', 'minify' => true, 'combine' => false), $pkg
         );
+
         $al->registerGroup('datatables', array(
             array('javascript', 'datatables'),
             array('css', 'datatables')
+        ));
+
+        $al->register('javascript', 'payrexx', 'js/providers/payrexx.js',
+            array('version' => '1.0', 'minify' => true, 'combine' => false), $pkg
+        );
+        $al->registerGroup('payrexx', array(
+            array('javascript', 'payrexx')
         ));
     }
 

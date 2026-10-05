@@ -65,17 +65,6 @@ $this->inc('elements/header_top.php');  ?>
                                 </tbody>
                             </table>
                         </div>
-                        <div class="tab-pane" id="closed" role="tabpanel" aria-labelledby="all-tab">
-                            <ul class="list-group">
-                                <!--<li v-for="product in products" :key="product.id" class="list-group-item product-item">
-                                    {{product.name}}
-                                    <span class="pull-right">
-                                            <button class="btn btn-success btn-sm" v-on:click="addItem(product.id)"><i class="fa fa-plus"></i></button>
-                                        </span>
-                                    <span class="pull-right product-price">{{product.price}}</span>
-                                </li>-->
-                            </ul>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -103,11 +92,8 @@ $this->inc('elements/header_top.php');  ?>
                                 <button class="btn btn-primary btn-block" v-on:click="setOrdered">
                                     Markierte auf "Bestellt" setzen
                                 </button>
-                                <!--<button class="btn btn-info btn-block" v-on:click="setDelivered">
+                                <button class="btn btn-success btn-block" v-on:click="setDelivered">
                                     Markierte auf "Ausgeliefert" setzen
-                                </button>-->
-                                <button class="btn btn-danger btn-block" v-on:click="setClosed">
-                                    Markierte auf "Abgeschlossen" setzen
                                 </button>
                             </div>
                         </div>
@@ -188,16 +174,21 @@ $this->inc('elements/header_top.php');  ?>
                 this.selected_orders = [];
             },
             setDelivered: function(){
-                $.post("<?=$orderSetDeliveredAction?>", {selected_orders:this.selected_orders, ccm_token: this.ccm_token}, function (response) {
-                    OrderManagement.alertSuccess(response);
-                    OrderManagement.getOrders();
-                }).fail(function (response) {
-                    OrderManagement.alertError(response)
+                let hasOpen = false;
+                let orders = this.orders;
+                if(this.selected_orders.length <= 0)return;
+                this.selected_orders.forEach(function(orderID){
+                    let ord = orders.find((o) => o.id === orderID);
+                    if(ord && (ord.status === 'Offen' || ord.status_handle === 'incomplete' || ord.status_handle === 'open' || ord.status_handle === 'awaiting_processing')){
+                        hasOpen = true;
+                    }
                 });
-                this.selected_orders = [];
-            },
-            setClosed: function(){
-                $.post("<?=$orderSetClosedAction?>", {selected_orders:this.selected_orders, ccm_token: this.ccm_token}, function (response) {
+                if(hasOpen){
+                    if(!confirm("Du hast Bestellungen ausgewählt, die noch nicht auf 'Bestellt' gesetzt wurden. Bist du sicher?")){
+                        return;
+                    }
+                }
+                $.post("<?=$orderSetDeliveredAction?>", {selected_orders:this.selected_orders, ccm_token: this.ccm_token}, function (response) {
                     OrderManagement.alertSuccess(response);
                     OrderManagement.getOrders();
                 }).fail(function (response) {

@@ -2,12 +2,11 @@
 use CreditManager\CreditManager;
 $nh = Core::make('helper/navigation') ?>
 
+<?php if(!empty(Config::get('credit_manager.categories_topic'))):?>
 <div class="ccm-dashboard-header-buttons">
-    <a href="#" class="btn btn-primary" data-button="bulk_add_record"><i class="fa fa-plus"></i> <?=t('Bulk Add Transactions')?></a>
-    <?php if(!empty(Config::get('credit_manager.categories_topic'))):?>
-        <a href="/dashboard/system/attributes/topics/view<?=Config::get('credit_manager.categories_topic')?>" class="btn btn-primary">Kategorie Tags Verwalten</a>
-    <?php endif; ?>
+    <a href="/dashboard/system/attributes/topics/view<?=Config::get('credit_manager.categories_topic')?>" class="btn btn-primary">Kategorie Tags Verwalten</a>
 </div>
+<?php endif; ?>
 
 <div class="ccm-dashboard-content">
 
@@ -51,7 +50,7 @@ $nh = Core::make('helper/navigation') ?>
 
 <div class="ccm-dashboard-content-full">
     <table class="table ccm-search-results-table">
-        <thead class="hidden-print">
+        <thead>
         <tr>
             <th><?php $dir = ($ul->getActiveSortDirection() == 'asc' ? 'desc' : 'asc');?>
                 <a href="<?=$ul->getSortURL('u.uName',$dir)?>">Nickname</a>
@@ -84,17 +83,6 @@ $nh = Core::make('helper/navigation') ?>
 </div>
 
 <script>
-    $('a[data-button=bulk_add_record]').on('click', function() {
-        $.fn.dialog.open({
-            href: '/ccm/credit_manager/bulk_add_record',
-            title: 'Bulk Add Transactions',
-            width: '320',
-            height: '360',
-            modal: true
-        });
-        return false;
-    });
-
     $('a[data-button=add_record]').on('click', function() {
         var uId = $(this).data('uid');
         $.fn.dialog.open({

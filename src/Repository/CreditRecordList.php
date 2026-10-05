@@ -67,6 +67,15 @@ class CreditRecordList extends DatabaseItemList
         $this->query->setParameter('keywords', '%' . $keywords . '%');
     }
 
+    public function filterByDate($start, $end)
+    {
+        $this->query->andWhere('cr.timestamp >= :start')
+            ->andWhere('cr.timestamp <= :end')
+            ->setParameter('start', $start)
+            ->setParameter('end', $end)
+            ->orderBy('cr.timestamp', 'DESC');
+    }
+
     protected function getAttributeKeyClassName()
     {
         return '\\Concrete\\Core\\Attribute\\Key\\CollectionKey';

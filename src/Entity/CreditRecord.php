@@ -130,7 +130,7 @@ class CreditRecord
     }
 
     public function addCategories($categories){
-        foreach($categories as $nodeId){
+        if(!empty($categories)) foreach($categories as $nodeId){
             $this->addCategory($nodeId);
         }
         return $this;

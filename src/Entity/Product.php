@@ -149,6 +149,16 @@ class Product
         return $this;
     }
 
+    public function updateCategories($categories){
+        $em = Database::connection()->getEntityManager();
+        $currentCategories = $em->getRepository('CreditManager\Entity\ProductCategory')->findBy(['pId'=>$this->getId()]);
+        foreach($currentCategories as $cC){
+            $em->remove($cC);
+            $em->flush();
+        }
+        $this->addCategories($categories);
+    }
+
     public function getCategories(){
         $em = Database::connection()->getEntityManager();
         return $em->getRepository('CreditManager\Entity\ProductCategory')->findBy(['pId'=>$this->getId()]);

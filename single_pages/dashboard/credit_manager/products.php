@@ -47,8 +47,8 @@ $nh = Core::make('helper/navigation'); ?>
                 <td class="text-right"><?=$product->getPrice()?></td>
                 <td class="text-right">
                     <div class="pull-right">
-                        <a herf="<?=$this->action('deleteProduct', $product->getId())?>" class="btn btn-danger btn-sm mr-3"><i class="fa fa-remove"></i></a>
-                        <a herf="#" data-button="edit_product" data-pid="<?=$product->getId()?>" class="btn btn-primary btn-sm"><i class="fa fa-edit"></i></a>
+                        <a href="<?=$this->action('deleteProduct', $product->getId())?>" class="btn btn-danger btn-sm mr-3"><i class="fa fa-trash"></i></a>
+                        <a href="#" data-button="edit_product" data-pid="<?=$product->getId()?>" class="btn btn-primary btn-sm"><i class="fa fa-edit"></i></a>
                     </div>
                 </td>
             </tr>

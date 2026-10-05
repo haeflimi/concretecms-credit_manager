@@ -13,14 +13,7 @@ class Balance extends PageController
     {
         $user = new User();
         $ui = $user->getUserInfoObject();
-        $history = CreditManager::getUserHistory($user);
-        $balance = CreditManager::getUserBalance($user);
-        $this->set('balance', $balance);
+        $history = CreditManager::getUserHistory($user, 99999999);
         $this->set('history', $history);
-    }
-
-    public function history($user_id)
-    {
-
     }
 }

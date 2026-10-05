@@ -3,6 +3,7 @@
     <trees>
         <tree type="topic" name="Credit Manager Kategorien">
             <category name="Zahlungsmethoden">
+                <topic name="Payrexx"/>
                 <topic name="Paypal"/>
                 <topic name="Bar"/>
                 <topic name="Überweisung"/>

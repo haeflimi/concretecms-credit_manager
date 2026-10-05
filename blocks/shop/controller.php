@@ -4,18 +4,16 @@ namespace Concrete\Package\CreditManager\Block\Shop;
 
 use Application\Turicane\CurrentLan;
 use Concrete\Core\Block\BlockController;
-use Concrete\Core\Express\EntryList;
 use Concrete\Core\Http\Response;
-use Concrete\Core\Support\Facade\Database;
-use Concrete\Core\Tree\Node\Type\Topic as TopicTreeNode;
-use Concrete\Core\Tree\Type\Topic as TopicTree;
 use Concrete\Core\User\User;
-use Concrete\Core\Support\Facade\Config;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Group\GroupList;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Order\Order;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Order\OrderItem;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Order\OrderList;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Order\OrderStatus\OrderStatus;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Product\Product;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductList;
 use Core;
-use CreditManager\CreditManager;
-use CreditManager\Entity\OrderPosition;
-use Express;
-use Tfts\Tfts;
 
 class Controller extends BlockController {
 
@@ -29,6 +27,7 @@ class Controller extends BlockController {
   protected $btCacheBlockOutputForRegisteredUsers = false;
   protected $btCacheBlockOutputLifetime = 300;
   protected $btHandle = 'cm_shop';
+  protected $communityStoreProductTypeId = 2;
 
   public function __construct($obj = null) {
     parent::__construct($obj);
@@ -46,65 +45,105 @@ class Controller extends BlockController {
     parent::save($args);
   }
 
+  public function add()
+  {
+      $this->edit();
+  }
+
   public function edit()
   {
-      $tt = new TopicTree();
-      $tree = $tt->getByID(Core::make('helper/security')->sanitizeInt(Config::get('credit_manager.product_categories_topic')));
-      $this->set('categoryTree',$tree);
-      $nodeIds = $tree->getRootTreeNodeObject()->getAllChildNodeIDs();
-      $nodes = [0=>'Keine'];
-      foreach($nodeIds as $key => $nodeId){
-          $node = TopicTreeNode::getByID($nodeId);
-          $nodes[$nodeId] = $node->getTreeNodeDisplayName();
+      $groups = [0 => t('Keine')];
+      $groupList = GroupList::getGroupList();
+      foreach ($groupList as $group) {
+          $groups[$group->getGroupID()] = $group->getGroupName();
       }
-      $this->set('categoryTreeNodes', $nodes);
-      $this->set('active_category',$this->active_category);
-      $this->set('run_time', $this->run_time);
+      $this->set('categoryTreeNodes', $groups);
+      $this->set('active_category', $this->active_category ?? 0);
+      $this->set('run_time', $this->run_time ?? '');
   }
 
   public function view() {
 
       $this->requireAsset('javascript', 'vue');
       $this->requireAsset('javascript', 'slimScroll');
+      $this->requireAsset('pnotify');
 
       $this->set('ccm_token', json_encode(Core::make('token')->generate('shop_block_order')));
 
-      $em = Database::connection()->getEntityManager();
-      $qb = $em->createQueryBuilder();
-      $qb->select('p')
-          ->from('CreditManager\Entity\Product', 'p')
-          ->innerJoin('CreditManager\Entity\ProductCategory', 'pc','WITH', 'p.Id = pc.pId')
-          ->where('p.isOrder = :isOrder')
-          ->andWhere('pc.nodeId = :categoryNodeId')
-          ->orderBy('p.name')
-          ->setParameter('isOrder', 1)
-          ->setParameter('categoryNodeId', $this->active_category);
-      $query = $qb->getQuery();
-      $productObjects = $query->getResult();
       $products = [];
-      foreach($productObjects as $po){
-          if(empty($po))continue;
-          $products[] = [
-              'id' => $po->getId(),
-              'name' => $po->getName(),
-              'price' => $po->getPrice()
-          ];
+      if (!empty($this->active_category)) {
+          $productList = new ProductList();
+          if ($this->communityStoreProductTypeId) {
+              $productList->setProductType($this->communityStoreProductTypeId);
+          }
+          $productList->setGroupID((int)$this->active_category);
+          $productObjects = $productList->getResults();
+          foreach ($productObjects as $po) {
+              if (empty($po)) continue;
+              $products[] = [
+                  'id' => $po->getID(),
+                  'name' => $po->getName(),
+                  'price' => $po->getPrice()
+              ];
+          }
       }
       $this->set('products', json_encode($products));
 
       $u = new User();
-      $orderObjects = $em->getRepository('CreditManager\Entity\OrderPosition')->findBy(['uId'=>$u->getUserID(),'status'=>['open','ordered']]);
       $orders = [];
-      $allStates = OrderPosition::getAllStates();
-      foreach($orderObjects as $oo)
-      {
-          if(!is_object($oo))continue;
-          $orders[] = [
-              'id' => $oo->getId(),
-              'product' => $oo->getProduct()->getName(),
-              'status' => $allStates[$oo->getStatus()],
-          ];
+      if ($u->isRegistered()) {
+          $orderList = new OrderList();
+          $orderList->setCustomerID($u->getUserID());
+          $orderObjects = $orderList->getResults();
+
+          foreach ($orderObjects as $oo) {
+              if (!is_object($oo)) continue;
+
+              $standing = $oo->getAttribute('standing');
+              if ($standing) {
+                  continue;
+              }
+
+              if (class_exists(CurrentLan::class) && !empty(CurrentLan::$lanPageId)) {
+                  $eventId = $oo->getAttribute('event_id');
+                  if (is_object($eventId) && method_exists($eventId, 'getCollectionID')) {
+                      $eventId = $eventId->getCollectionID();
+                  } elseif (is_object($eventId) && method_exists($eventId, 'getValue')) {
+                      $eventId = $eventId->getValue();
+                  }
+
+                  if ($eventId !== null && $eventId !== '' && (string)$eventId !== (string)CurrentLan::$lanPageId) {
+                      continue;
+                  }
+              }
+
+              if ($oo->getCancelled()) {
+                  continue;
+              }
+
+              $productNames = [];
+              foreach ($oo->getOrderItems() as $item) {
+                  $qty = (int)$item->getQuantity();
+                  $name = $item->getProductName();
+                  $productNames[] = $qty > 1 ? ($qty . 'x ' . $name) : $name;
+              }
+              $productName = !empty($productNames) ? implode(', ', $productNames) : t('Kein Produkt');
+
+              $statusName = $oo->getStatus();
+              $statusHandle = $oo->getStatusHandle();
+              if (empty($statusName)) {
+                  $statusName = $statusHandle ? ucfirst($statusHandle) : t('Offen');
+              }
+
+              $orders[] = [
+                  'id' => $oo->getOrderID(),
+                  'product' => $productName,
+                  'status' => $statusName,
+                  'statusHandle' => $statusHandle,
+              ];
+          }
       }
+
       $this->set('orders', json_encode($orders));
       $this->set('run_time', $this->run_time);
       $this->set('bId', $this->bID);
@@ -121,37 +160,69 @@ class Controller extends BlockController {
       if(!$user){
           return new Response('Invalid User.', 401);
       }
-      $em = Database::connection()->getEntityManager();
-      $product = $em->find('CreditManager\Entity\Product',$order['product_id']);
+      $product = Product::getByID($order['product_id']);
       if(!$product){
           return new Response('Invalid Product.', 401);
       }
 
-      $orderPosition = new OrderPosition();
-      $orderPosition->setQuantity(1);
-      $orderPosition->setStatus('open');
-      $orderPosition->setProduct($product);
-      $orderPosition->setUserId($user->getUserID());
-      $em->persist($orderPosition);
-      $em->flush();
-      return new Response('Bestellung Erfolgreich');
+      try {
+          $csOrder = new Order();
+          $csOrder->setCustomerID($user->getUserID());
+          $csOrder->setDate(new \DateTime());
+          $csOrder->setTotal($product->getPrice());
+          $csOrder->save();
+
+          if (class_exists(CurrentLan::class) && !empty(CurrentLan::$lanPageId)) {
+              $csOrder->setAttribute('event_id', CurrentLan::$lanPageId);
+          }
+
+          $itemData = [
+              'product' => [
+                  'object' => $product,
+                  'qty' => 1,
+                  'pID' => $product->getID(),
+              ],
+              'productAttributes' => [],
+          ];
+          OrderItem::add($itemData, $csOrder->getOrderID());
+
+          $csOrder->updateStatus();
+
+          return new Response('Bestellung Erfolgreich');
+      } catch (\Throwable $e) {
+          return new Response('Failed: ' . $e->getMessage(), 500);
+      }
   }
 
   public function action_deleteOrder() {
       $order = $this->post('order');
       $opId = $order['order_id'];
-      $em = Database::connection()->getEntityManager();
       $token = \Core::make("token");
       if (!$token->validate('shop_block_order')) {
           return new Response('Invalid Request Token.', 401);
       }
-      $orderPosition = $em->find('CreditManager\Entity\OrderPosition',$opId);
-      if($orderPosition->getStatus() != 'open'){
+      $csOrder = Order::getByID($opId);
+      if (!$csOrder) {
+          return new Response('Invalid Order.', 401);
+      }
+      $u = new User();
+      if ((int)$csOrder->getCustomerID() !== (int)$u->getUserID()) {
+          return new Response('Unauthorized.', 403);
+      }
+
+      $statusHandle = $csOrder->getStatusHandle();
+      $startingStatus = OrderStatus::getStartingStatus();
+      $startingHandle = $startingStatus ? $startingStatus->getHandle() : 'incomplete';
+
+      if ($statusHandle && !in_array($statusHandle, ['incomplete', 'open', $startingHandle])) {
           return new Response('Cannot delete processed Order.', 401);
       } else {
-          $em->remove($orderPosition);
-          $em->flush();
-          return new Response('Löschung Erfolgreich');
+          try {
+              $csOrder->remove();
+              return new Response('Löschung Erfolgreich');
+          } catch (\Throwable $e) {
+              return new Response('Failed: ' . $e->getMessage(), 500);
+          }
       }
   }
 }

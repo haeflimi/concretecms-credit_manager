@@ -118,7 +118,7 @@ $this->inc('elements/header_top.php');  ?>
         <i class="fa fa-thumbs-up"></i>
     </div>
     <div class="fullscreen abort bg-danger" v-if="active_alert == 'error'">
-        <i class="fa fa-remove"></i>
+        <i class="fa fa-trash"></i>
     </div>
 </section>
 <script>

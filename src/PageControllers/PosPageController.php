@@ -9,6 +9,12 @@ use Concrete\Core\Support\Facade\Database;
 use Concrete\Core\User\UserList;
 use Concrete\Core\Page\Page;
 use Concrete\Core\Support\Facade\Express;
+use Concrete\Package\CommunityStore\Controller\SinglePage\Dashboard\Store\Orders;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Customer\Customer;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Order\Order;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Order\OrderItem;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Order\OrderList;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Product\Product;
 use CreditManager\CreditManager;
 use CreditManager\Entity\CreditRecord;
 use Concrete\Core\User\User;
@@ -79,17 +85,48 @@ class PosPageController extends PageController
         $totalPrice = 0;
         $itemCount = 0;
         $itemNames = [];
+        $orderItemsData = [];
         foreach($items as $i){
-            $product = $em->find('CreditManager\Entity\Product',$i['id']);
-            $totalPrice += ($i['quantity'] * $product->getPrice());
-            $itemCount += $i['quantity'];
-            $itemNames[] = $product->getName();
+            $product = Product::getByID($i['id']);
+            if ($product) {
+                $totalPrice += ($i['quantity'] * $product->getPrice());
+                $itemCount += $i['quantity'];
+                $itemNames[] = $product->getName();
+                $orderItemsData[] = [
+                    'product' => $product,
+                    'quantity' => $i['quantity'],
+                ];
+            }
         }
         $message = $itemCount.' Produkte gekauft: ('.implode(' ,', $itemNames).')';
         $lanName = CurrentLan::getLANTitle();
         try {
             $cr = CreditManager::addRecord($user, -$totalPrice, $message, [$this->getCmCategory(),$lanName]);
-        } catch (Exception $e) {
+            $standingOrder = CreditManager::getCommunityStoreStandingOrder($user, CurrentLan::$lanPageId);
+            if(!$standingOrder){
+                // if there is no standing order, we need to create one
+                $standingOrder = CreditManager::createCommunityStoreStandingOrder($user, CurrentLan::$lanPageId);
+            }
+            // now we need to add the items to the standing order
+            foreach ($orderItemsData as $orderItemData) {
+                $itemData = [
+                    'product' => [
+                        'object' => $orderItemData['product'],
+                        'qty' => $orderItemData['quantity'],
+                        'pID' => $orderItemData['product']->getID(),
+                    ],
+                    'productAttributes' => [],
+                ];
+                OrderItem::add($itemData, $standingOrder->getOrderID());
+            }
+
+            $standingOrder->setTotal((float)$standingOrder->getTotal() + $totalPrice);
+            if($standingOrder->getStatusHandle() != 'delivered'){
+                $standingOrder->updateStatus('delivered', 'Self-Checkout Purchase');
+            }
+            $standingOrder->save();
+
+        } catch (\Throwable $e) {
             return new Response("Failed: " . $e->getMessage(), 500);
         }
 

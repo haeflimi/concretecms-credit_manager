@@ -111,7 +111,7 @@ $this->inc('elements/header_top.php');  ?>
         <i class="fa fa-thumbs-up"></i>
     </div>
     <div class="fullscreen abort bg-danger" v-if="active_alert == 'error'">
-        <i class="fa fa-remove"></i>
+        <i class="fa fa-trash"></i>
     </div>
 </section>
 <script>
@@ -177,7 +177,22 @@ $this->inc('elements/header_top.php');  ?>
                 var user = this.users.find(user => user.badge_id === badge_id);
                 if(user){
                     this.active_user = user;
+                    return;
                 } else {
+                    // In case the reader cuts of the the id early, we can check if there is a unique
+                    // match anyway
+                    var maybe = this.users.filter(function(user) {
+                        if(user.badge_id){
+                            if(user.badge_id.includes(badge_id)){
+                                return true;
+                            }
+                        }
+                        return false;
+                    })
+                    if(maybe.length === 1){
+                        this.active_user = maybe[0];
+                        return;
+                    }
                     this.alertError('Kein Benutzer mit dieser Badge Id')
                     this.reset();
                 }
@@ -265,6 +280,18 @@ $this->inc('elements/header_top.php');  ?>
     });
 </script>
 <style>
+    html {
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+    }
+    body {
+        height: 100%;
+        padding: 0;
+        overflow: auto;
+        margin: 0;
+        -webkit-overflow-scrolling: touch;
+    }
     #comp-pos {
         height: 100vh;
     }
@@ -314,7 +341,7 @@ $this->inc('elements/header_top.php');  ?>
         display: none;
     }
     #comp-pos  .products .slimScroll {
-        max-height: 400px;
+        /*max-height: 400px;*/
         overflow-y: scroll;
     }
 </style>

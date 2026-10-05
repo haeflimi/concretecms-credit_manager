@@ -21,7 +21,7 @@ if(empty($userId)):?>
             <tr v-for="order in orders">
                 <td>{{ order.status }}</td>
                 <td>{{ order.product }}</td>
-                <td><button v-if="order.status == 'Offen'" class="btn btn-danger btn-sm pull-right" title="Bestellung löschen" v-on:click="removeItem(order.id)"><i class="fa fa-remove"></i></button></td>
+                <td><button v-if="order.status == 'Offen' || order.statusHandle == 'incomplete' || order.status == 'Awaiting Processing'" class="btn btn-danger btn-sm pull-right" title="Bestellung löschen" v-on:click="removeItem(order.id)"><i class="fa fa-trash"></i></button></td>
             </tr>
         </tbody>
     </table>
@@ -81,7 +81,6 @@ if(empty($userId)):?>
                 var order = {
                     order_id: id
                 };
-                console.log(order);
                 $.post("<?=$this->action('deleteOrder')?>", {order,ccm_token: this.ccm_token}, function (response) {
                     Shop.alertSuccess(response);
                     location = location;

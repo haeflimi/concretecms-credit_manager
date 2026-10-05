@@ -19,6 +19,7 @@ use Page;
 use Site;
 use Config;
 use Core;
+use URL;
 
 class Products extends DashboardPageController
 {
@@ -48,8 +49,9 @@ class Products extends DashboardPageController
     {
         $em = Database::connection()->getEntityManager();
         $product = $em->find('CreditManager\Entity\Product', $pId);
-        $em->remove($product);
-
+        $res = $em->remove($product);
+        $em->flush($product);
+        
         $this->flash('success', t('Product Removed'));
         $this->redirect(URL::to('/dashboard/credit_manager/products'));
     }

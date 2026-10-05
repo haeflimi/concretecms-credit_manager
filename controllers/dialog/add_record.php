@@ -3,6 +3,7 @@
 namespace Concrete\Package\CreditManager\Controller\Dialog;
 
 use Concrete\Core\Controller\Controller;
+use Concrete\Core\Tree\Node\Type\Category;
 use Concrete\Core\Tree\Type\Topic as TopicTree;
 use CreditManager\CreditManager;
 use Concrete\Core\Tree\Node\Type\Topic as TopicTreeNode;
@@ -25,6 +26,7 @@ class AddRecord extends Controller
         $nodes = [];
         foreach($nodeIds as $key => $nodeId){
             $node = TopicTreeNode::getByID($nodeId);
+            if($node instanceof Category)continue;
             $nodes[$nodeId] = $node->getTreeNodeDisplayName();
         }
         $this->set('categoryTreeNodes', $nodes);

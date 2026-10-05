@@ -19,8 +19,8 @@ class AddProduct extends Controller
     public function view($pId = null)
     {
         $em = Database::connection()->getEntityManager();
-        $this->requireAsset('core/file-manager');
-        $this->requireAsset('core/topics');
+        $this->requireAsset('javascript','core/file-manager');
+        $this->requireAsset('javascript','core/topics');
         $this->requireAsset('select2');
         $tt = new TopicTree();
         $tree = $tt->getByID(Core::make('helper/security')->sanitizeInt(Config::get('credit_manager.product_categories_topic')));
@@ -67,7 +67,7 @@ class AddProduct extends Controller
             $em = Database::connection()->getEntityManager();
             $em->persist($product);
             $em->flush();
-            $product->addCategories($this->post('selectedCategories'));
+            $product->updateCategories($this->post('selectedCategories'));
             $this->flash('success', t('Product Added'));
         } else {
             $this->flash('error', $e);

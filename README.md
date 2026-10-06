@@ -45,15 +45,17 @@ concrete/bin/concrete c5:exec packages/credit_manager/tools/migrate_to_store.php
 ```
 
 - Without `--apply` nothing is written. The reports land in `data/migration/` (or `--report-dir`):
-  `migration_report.csv` (one line per ledger row: kind, category, payment method, product, action),
+  `migration_report.csv` (one line per ledger row: year, kind, category, payment method, product, action),
+  `migration_orders.csv` (one line per member and year: charges, top-ups, net, items, action),
   `possible_duplicates.csv` (existing store orders that look like a ledger row) and `reconciliation.csv`
   (per member: ledger sums vs. migrated orders, expected debt/credit).
-- Every ledger row with a value becomes one paid, archived store order: customer = member (0 with the
-  member id in the notes if the account is gone), order date and paid date = record timestamp,
-  payment method = Payrexx / Paypal / Bar / Überweisung for top-ups (from the category, else from the
-  comment) and "Vereinskonto" for charges, one item on a placeholder product per category in the product
-  group "Vereinskonto (Archiv)" (inactive products, price 0), the comment as item name, the ledger id as
-  transaction reference `cm:<Id>`, order attributes `cm_record_id`, `cm_kind`, `cm_archive`, `cm_user`.
+- The ledger is condensed into **one paid, archived store order per member and year**: customer = member
+  (0 with the member id in the notes if the account is gone), order and paid date = the year's last booking,
+  one item per category for the charges (positive, e.g. "Self Service POS – 312 Buchungen") and one item per
+  payment method for the money received (negative, e.g. "Einzahlung Payrexx – 4 Buchungen"), the net of the
+  year as order total, payment method "Vereinskonto", placeholder products per category in the product group
+  "Vereinskonto (Archiv)" (inactive, price 0), transaction reference `cm:y:<uId>:<year>`, order attributes
+  `cm_year`, `cm_records`, `cm_kind`, `cm_archive`, `cm_user`. `migration_orders.csv` lists every year order.
 - Each member's final balance: debt → one unpaid order "Offener Saldo Vereinskonto" (`cm:debt:<uId>`,
   status incomplete); surplus → store credit entry `migration:cm_balance:<uId>`. Members without an
   account get neither (listed in the reconciliation).

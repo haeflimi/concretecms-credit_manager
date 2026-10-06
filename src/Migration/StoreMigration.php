@@ -15,15 +15,18 @@ use Doctrine\DBAL\Connection;
 /**
  * Moves the credit_manager ledger into Community Store.
  *
- * Every ledger row becomes one archived, paid store order (charges and top-ups alike), each member's final
- * balance becomes either an unpaid "open balance" order (debt) or store credit (surplus, through the
- * community_store_credit package). The run is idempotent: orders carry the ledger row id as transaction
- * reference (`cm:<Id>`), balances use `cm:debt:<uId>` / `migration:cm_balance:<uId>`; rows already present are
- * skipped. A dry run writes the reports and changes nothing.
+ * The ledger is condensed into one archived, paid store order per member and year: one item per category for
+ * the charges (positive) and one item per payment method for the money received (negative), the number of
+ * ledger rows in the item name, the net of the year as order total. Each member's final balance becomes either
+ * an unpaid "open balance" order (debt) or store credit (surplus, through the community_store_credit package).
+ * The run is idempotent: year orders carry `cm:y:<uId>:<year>` as transaction reference, balances use
+ * `cm:debt:<uId>` / `migration:cm_balance:<uId>`; references already present are skipped. A dry run writes
+ * the reports and changes nothing.
  */
 class StoreMigration
 {
     const REF_PREFIX = 'cm:';
+    const YEAR_PREFIX = 'cm:y:';
     const SOURCE = 'cm_migration';
     const GROUP_NAME = 'Vereinskonto (Archiv)';
     const PRODUCT_TOPUP = 'Kontoeinzahlung';
@@ -34,7 +37,8 @@ class StoreMigration
     const STATUS_DEBT = 'incomplete';
     const PAYMENT_NAMES = ['Payrexx', 'Paypal', 'Bar', 'Überweisung'];
     const ATTRIBUTE_KEYS = [
-        'cm_record_id' => ['number', 'Credit Manager Record Id'],
+        'cm_year' => ['number', 'Credit Manager Year'],
+        'cm_records' => ['number', 'Credit Manager Record Count'],
         'cm_source' => ['text', 'Credit Manager Source'],
         'cm_kind' => ['text', 'Credit Manager Kind'],
         'cm_archive' => ['boolean', 'Credit Manager Archive'],
@@ -93,10 +97,14 @@ class StoreMigration
         foreach ($rows as $row) {
             $plan[] = $this->classify($row);
         }
-        $this->writeCsv('migration_report.csv', ['recordId', 'uId', 'user', 'timestamp', 'value', 'kind', 'categories', 'paymentMethod', 'product', 'action', 'orderId'], array_map(function ($p) {
-            return [$p['id'], $p['uId'], $p['userName'], $p['timestamp'], $p['value'], $p['kind'], implode('|', $p['categoryNames']), $p['paymentMethod'], $p['product'], $p['action'], isset($p['orderId']) ? $p['orderId'] : ''];
+        $orders = $this->aggregate($plan);
+        $this->writeCsv('migration_report.csv', ['recordId', 'uId', 'user', 'timestamp', 'year', 'value', 'kind', 'categories', 'paymentMethod', 'product', 'action', 'orderRef'], array_map(function ($p) {
+            return [$p['id'], $p['uId'], $p['userName'], $p['timestamp'], $p['year'], $p['value'], $p['kind'], implode('|', $p['categoryNames']), $p['paymentMethod'], $p['product'], $p['action'], isset($p['orderRef']) ? $p['orderRef'] : ''];
         }, $plan));
-        $this->summarise($plan);
+        $this->writeCsv('migration_orders.csv', ['uId', 'user', 'year', 'records', 'charges', 'topups', 'net', 'items', 'action', 'orderId'], array_map(function ($o) {
+            return [$o['uId'], $o['userName'], $o['year'], $o['records'], number_format($o['charges'], 2, '.', ''), number_format($o['topups'], 2, '.', ''), number_format($o['net'], 2, '.', ''), count($o['items']), $o['action'], isset($o['orderId']) ? $o['orderId'] : ''];
+        }, $orders));
+        $this->summarise($plan, $orders);
         $this->reportPossibleDuplicates($plan);
 
         $balances = $this->balances();
@@ -117,7 +125,7 @@ class StoreMigration
 
         $this->ensureAttributeKeys();
         $this->ensureCatalog();
-        $this->applyRows($plan);
+        $this->applyYearOrders($orders);
         $this->applyBalances($balances);
         $ok = $this->writeReconciliation($balances);
         $this->say($ok ? 'Reconciliation OK.' : 'RECONCILIATION FAILED — see reconciliation.csv');
@@ -209,6 +217,7 @@ class StoreMigration
             'userName' => isset($this->users[$uId]) ? $this->users[$uId]['uName'] : '',
             'userExists' => isset($this->users[$uId]),
             'timestamp' => $row['timestamp'],
+            'year' => (int) substr((string) $row['timestamp'], 0, 4),
             'value' => number_format($value, 2, '.', ''),
             'comment' => $comment,
             'categoryNames' => $names,
@@ -221,13 +230,8 @@ class StoreMigration
             $plan['action'] = 'skip: zero value';
             return $plan;
         }
-        $ref = self::REF_PREFIX . $plan['id'];
-        if (isset($this->existingRefs[$ref])) {
-            $plan['action'] = 'exists';
-            $plan['orderId'] = $this->existingRefs[$ref];
-        } else {
-            $plan['action'] = 'create';
-        }
+        $plan['orderRef'] = self::YEAR_PREFIX . $uId . ':' . $plan['year'];
+        $plan['action'] = isset($this->existingRefs[$plan['orderRef']]) ? 'exists' : 'aggregate';
         if ($plan['kind'] === 'topup') {
             $plan['paymentMethod'] = $this->paymentMethodFor($names, $comment);
             $plan['product'] = self::PRODUCT_TOPUP;
@@ -289,7 +293,75 @@ class StoreMigration
         return self::PRODUCT_CHARGE_DEFAULT;
     }
 
-    protected function summarise(array $plan)
+    /**
+     * Groups the classified rows into one order per member and year.
+     *
+     * @return array keyed by order reference
+     */
+    protected function aggregate(array $plan)
+    {
+        $orders = [];
+        foreach ($plan as $p) {
+            if ($p['kind'] === 'zero') {
+                continue;
+            }
+            $ref = $p['orderRef'];
+            if (!isset($orders[$ref])) {
+                $orders[$ref] = [
+                    'ref' => $ref,
+                    'uId' => $p['uId'],
+                    'userName' => $p['userName'],
+                    'userExists' => $p['userExists'],
+                    'year' => $p['year'],
+                    'records' => 0,
+                    'charges' => 0.0,
+                    'topups' => 0.0,
+                    'net' => 0.0,
+                    'firstId' => $p['id'],
+                    'lastId' => $p['id'],
+                    'lastTimestamp' => $p['timestamp'],
+                    'items' => [],
+                    'action' => $p['action'],
+                    'orderId' => isset($this->existingRefs[$ref]) ? $this->existingRefs[$ref] : null,
+                ];
+            }
+            $o = &$orders[$ref];
+            $value = (float) $p['value'];
+            $o['records']++;
+            $o['lastId'] = max($o['lastId'], $p['id']);
+            if (strcmp($p['timestamp'], $o['lastTimestamp']) > 0) {
+                $o['lastTimestamp'] = $p['timestamp'];
+            }
+            if ($p['kind'] === 'charge') {
+                $o['charges'] += -$value;
+                $itemKey = 'charge:' . $p['product'];
+                $label = $p['product'];
+                $product = $p['product'];
+            } else {
+                $o['topups'] += $value;
+                $itemKey = 'topup:' . $p['paymentMethod'];
+                $label = 'Einzahlung ' . $p['paymentMethod'];
+                $product = self::PRODUCT_TOPUP;
+            }
+            if (!isset($o['items'][$itemKey])) {
+                $o['items'][$itemKey] = ['kind' => $p['kind'], 'product' => $product, 'label' => $label, 'count' => 0, 'amount' => 0.0];
+            }
+            $o['items'][$itemKey]['count']++;
+            $o['items'][$itemKey]['amount'] += $value; // charges negative, top-ups positive
+            $o['net'] = round($o['charges'] - $o['topups'], 2);
+            unset($o);
+        }
+        foreach ($orders as &$o) {
+            $o['charges'] = round($o['charges'], 2);
+            $o['topups'] = round($o['topups'], 2);
+            ksort($o['items']);
+        }
+        unset($o);
+        ksort($orders);
+        return $orders;
+    }
+
+    protected function summarise(array $plan, array $orders)
     {
         $byAction = [];
         $byKind = [];
@@ -302,7 +374,7 @@ class StoreMigration
             $byKind[$key]['n']++;
             $byKind[$key]['sum'] += (float) $p['value'];
         }
-        $this->say('Rows: ' . count($plan));
+        $this->say('Ledger rows: ' . count($plan));
         foreach ($byAction as $action => $n) {
             $this->say(sprintf('  %-22s %6d', $action, $n));
         }
@@ -312,6 +384,21 @@ class StoreMigration
         }
         $noUser = array_filter($plan, function ($p) { return !$p['userExists'] && $p['kind'] !== 'zero'; });
         $this->say('Rows of users without account (archived on customer 0): ' . count($noUser));
+        $toCreate = array_filter($orders, function ($o) { return $o['action'] === 'aggregate'; });
+        $byYear = [];
+        foreach ($orders as $o) {
+            if (!isset($byYear[$o['year']])) {
+                $byYear[$o['year']] = ['n' => 0, 'charges' => 0.0, 'topups' => 0.0];
+            }
+            $byYear[$o['year']]['n']++;
+            $byYear[$o['year']]['charges'] += $o['charges'];
+            $byYear[$o['year']]['topups'] += $o['topups'];
+        }
+        ksort($byYear);
+        $this->say(sprintf('Year orders: %d (%d to create, %d existing)', count($orders), count($toCreate), count($orders) - count($toCreate)));
+        foreach ($byYear as $year => $v) {
+            $this->say(sprintf('  %d: %4d orders, charges %12.2f, top-ups %12.2f', $year, $v['n'], $v['charges'], $v['topups']));
+        }
     }
 
     /**
@@ -421,76 +508,80 @@ class StoreMigration
         return $product;
     }
 
-    protected function applyRows(array $plan)
+    protected function applyYearOrders(array $orders)
     {
         $byUser = [];
-        foreach ($plan as $p) {
-            if ($p['action'] === 'create') {
-                $byUser[$p['uId']][] = $p;
+        foreach ($orders as $o) {
+            if ($o['action'] === 'aggregate') {
+                $byUser[$o['uId']][] = $o;
             }
         }
         $done = 0;
         $total = array_sum(array_map('count', $byUser));
-        foreach ($byUser as $uId => $rows) {
-            $this->em->transactional(function () use ($rows) {
-                foreach ($rows as $p) {
-                    $this->createArchiveOrder($p);
+        foreach ($byUser as $uId => $userOrders) {
+            $this->em->transactional(function () use ($userOrders) {
+                foreach ($userOrders as $o) {
+                    $this->createYearOrder($o);
                 }
             });
-            $done += count($rows);
+            $done += count($userOrders);
             $this->resetEntityManager();
-            $this->say(sprintf('  %s  %d / %d orders written (user %d)', date('H:i:s'), $done, $total, $uId));
+            $this->say(sprintf('  %s  %d / %d year orders written (user %d)', date('H:i:s'), $done, $total, $uId));
         }
     }
 
-    protected function createArchiveOrder(array $p)
+    protected function createYearOrder(array $o)
     {
-        $user = $p['userExists'] ? $this->users[$p['uId']] : null;
-        $amount = abs((float) $p['value']);
-        $date = new \DateTime($p['timestamp']);
-        $product = $this->productFor($p['product']);
-        $itemName = $p['comment'] !== '' ? mb_substr($p['comment'], 0, 250) : $p['product'];
+        $user = $o['userExists'] ? $this->users[$o['uId']] : null;
+        $date = new \DateTime($o['lastTimestamp']);
 
         $order = new Order();
-        $order->setCustomerID($user ? $p['uId'] : 0);
+        $order->setCustomerID($user ? $o['uId'] : 0);
         $order->setDate($date);
-        $order->setPaymentMethodName($p['paymentMethod']);
+        $order->setPaymentMethodName(self::PAYMENT_ACCOUNT);
         $order->setShippingMethodName('');
         $order->setShippingTotal(0);
         $order->setTaxTotal(0);
         $order->setTaxIncluded(0);
-        $order->setTotal($amount);
-        $order->setTransactionReference(self::REF_PREFIX . $p['id']);
+        $order->setTotal($o['net']);
+        $order->setTransactionReference($o['ref']);
         $order->setPaid($date);
         $order->setLocale(Localization::activeLocale());
-        $notes = $p['comment'] . "\n" . sprintf('[credit_manager #%d, %s, Kategorien: %s]', $p['id'], $p['kind'], implode(', ', $p['categoryNames']) ?: '-');
+        $notes = sprintf('Vereinskonto %d: %d Buchungen (credit_manager #%d bis #%d), Belastungen %s, Einzahlungen %s, Saldo des Jahres %s',
+            $o['year'], $o['records'], $o['firstId'], $o['lastId'],
+            number_format($o['charges'], 2, '.', "'"), number_format($o['topups'], 2, '.', "'"), number_format(-$o['net'], 2, '.', "'"));
         if (!$user) {
-            $notes .= "\n" . sprintf('[Benutzer #%d existiert nicht mehr]', $p['uId']);
+            $notes .= "\n" . sprintf('[Benutzer #%d existiert nicht mehr]', $o['uId']);
         }
         $order->setNotes($notes);
         $order->save();
         $order->updateStatus(self::STATUS_ARCHIVE, 'credit_manager Archiv');
 
-        $item = new OrderItem();
-        $item->setOrder($order);
-        $item->setProductID($product->getID());
-        $item->setProductName($itemName);
-        $item->setSKU($product->getSKU());
-        $item->setPricePaid($amount);
-        $item->setTax(0);
-        $item->setTaxIncluded(0);
-        $item->setTaxName('');
-        $item->setQuantity(1);
-        $item->setQuantityLabel('');
-        $this->em->persist($item);
+        foreach ($o['items'] as $line) {
+            $product = $this->productFor($line['product']);
+            $item = new OrderItem();
+            $item->setOrder($order);
+            $item->setProductID($product->getID());
+            $item->setProductName(sprintf('%s – %d %s', $line['label'], $line['count'], $line['count'] === 1 ? 'Buchung' : 'Buchungen'));
+            $item->setSKU($product->getSKU());
+            // charges are what the member consumed (positive), money received reduces the total (negative)
+            $item->setPricePaid(round(-$line['amount'], 2));
+            $item->setTax(0);
+            $item->setTaxIncluded(0);
+            $item->setTaxName('');
+            $item->setQuantity(1);
+            $item->setQuantityLabel('');
+            $this->em->persist($item);
+        }
         $this->em->flush();
 
-        $order->setAttribute('cm_record_id', $p['id']);
+        $order->setAttribute('cm_year', $o['year']);
+        $order->setAttribute('cm_records', $o['records']);
         $order->setAttribute('cm_source', 'credit_manager');
-        $order->setAttribute('cm_kind', $p['kind']);
+        $order->setAttribute('cm_kind', 'archive');
         $order->setAttribute('cm_archive', true);
-        $order->setAttribute('cm_user', $user ? $user['uName'] : ('#' . $p['uId'] . ' (deleted)'));
-        $this->existingRefs[self::REF_PREFIX . $p['id']] = $order->getOrderID();
+        $order->setAttribute('cm_user', $user ? $user['uName'] : ('#' . $o['uId'] . ' (deleted)'));
+        $this->existingRefs[$o['ref']] = $order->getOrderID();
     }
 
     protected function applyBalances(array $balances)
@@ -572,12 +663,25 @@ class StoreMigration
     protected function writeReconciliation(array $balances)
     {
         $migrated = [];
+        // expected: one order per member and year with ledger activity; migrated: sums of the year orders' items
+        foreach ($this->db->fetchAll('SELECT uId, COUNT(DISTINCT YEAR(timestamp)) AS expected FROM cmCreditRecord WHERE value <> 0 GROUP BY uId') as $row) {
+            $migrated[(int) $row['uId']] = ['expected' => (int) $row['expected'], 'orders' => 0, 'charges' => 0.0, 'topups' => 0.0];
+        }
         foreach ($this->db->fetchAll(
-            'SELECT cr.uId, SUM(CASE WHEN cr.value < 0 THEN o.oTotal ELSE 0 END) AS charges, SUM(CASE WHEN cr.value > 0 THEN o.oTotal ELSE 0 END) AS topups,'
-            . ' SUM(cr.value <> 0) AS expected, COUNT(o.oID) AS orders'
-            . ' FROM cmCreditRecord cr LEFT JOIN CommunityStoreOrders o ON o.transactionReference = CONCAT(?, cr.Id) GROUP BY cr.uId', [self::REF_PREFIX]
+            'SELECT o.transactionReference AS ref, COUNT(DISTINCT o.oID) AS orders,'
+            . ' COALESCE(SUM(CASE WHEN oi.oiPricePaid > 0 THEN oi.oiPricePaid * oi.oiQty ELSE 0 END), 0) AS charges,'
+            . ' COALESCE(SUM(CASE WHEN oi.oiPricePaid < 0 THEN -oi.oiPricePaid * oi.oiQty ELSE 0 END), 0) AS topups'
+            . ' FROM CommunityStoreOrders o LEFT JOIN CommunityStoreOrderItems oi ON oi.oID = o.oID'
+            . ' WHERE o.transactionReference LIKE ? GROUP BY o.transactionReference', [self::YEAR_PREFIX . '%']
         ) as $row) {
-            $migrated[(int) $row['uId']] = $row;
+            $parts = explode(':', $row['ref']);
+            $uId = (int) $parts[2];
+            if (!isset($migrated[$uId])) {
+                $migrated[$uId] = ['expected' => 0, 'orders' => 0, 'charges' => 0.0, 'topups' => 0.0];
+            }
+            $migrated[$uId]['orders'] += (int) $row['orders'];
+            $migrated[$uId]['charges'] += (float) $row['charges'];
+            $migrated[$uId]['topups'] += (float) $row['topups'];
         }
         $debts = [];
         foreach ($this->db->fetchAll('SELECT transactionReference, oTotal, oPaid FROM CommunityStoreOrders WHERE transactionReference LIKE ?', [self::REF_PREFIX . 'debt:%']) as $row) {
@@ -616,7 +720,7 @@ class StoreMigration
                 (int) $m['orders'], number_format((float) $m['charges'], 2, '.', ''), number_format((float) $m['topups'], 2, '.', ''),
                 number_format($expectedDebt, 2, '.', ''), number_format($debt, 2, '.', ''), number_format($expectedCredit, 2, '.', ''), number_format($credit, 2, '.', ''), $status];
         }
-        $this->writeCsv('reconciliation.csv', ['uId', 'user', 'userExists', 'ledgerRecords', 'ledgerCharges', 'ledgerTopups', 'ledgerBalance', 'migratedOrders', 'migratedCharges', 'migratedTopups', 'expectedDebt', 'debtOrder', 'expectedCredit', 'storeCredit', 'status'], $rows);
+        $this->writeCsv('reconciliation.csv', ['uId', 'user', 'userExists', 'ledgerRecords', 'ledgerCharges', 'ledgerTopups', 'ledgerBalance', 'migratedYearOrders', 'migratedCharges', 'migratedTopups', 'expectedDebt', 'debtOrder', 'expectedCredit', 'storeCredit', 'status'], $rows);
         return $allOk;
     }
 

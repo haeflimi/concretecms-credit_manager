@@ -3,3 +3,5 @@ files/cache/*
 files/tmp/*
 .htaccess
 /.idea
+# production data dumps (personal financial data), never commit
+data/

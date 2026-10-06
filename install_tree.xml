@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<concrete5-cif version="1.0">
+    <trees>
+        <tree type="topic" name="Credit Manager Kategorien">
+            <category name="Zahlungsmethoden">
+                <topic name="Payrexx"/>
+                <topic name="Paypal"/>
+                <topic name="Bar"/>
+                <topic name="Überweisung"/>
+            </category>
+            <topic name="Catering POS"/>
+            <topic name="Self Service POS"/>
+            <topic name="Event Checkout"/>
+            <topic name="Event Checkin"/>
+            <topic name="Catering Order"/>
+        </tree>
+    </trees>
+</concrete5-cif>

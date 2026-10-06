@@ -29,6 +29,7 @@ class Controller extends Package implements ProviderAggregateInterface
         'src/PageControllers' => '\CreditManager\PageControllers',
         'src/Service' => '\CreditManager\Service',
         'src/Controller' => '\CreditManager\Controller',
+        'src/Migration' => '\CreditManager\Migration',
     ];
 
     public function getPackageName()

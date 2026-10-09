@@ -1,0 +1,351 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the credit_manager package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#: credit_manager/blocks/shop/controller.php:38
+msgid ""
+msgstr ""
+"Project-Id-Version: credit_manager\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-09 22:02+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: de_DE\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+
+#: credit_manager/controller.php:37 credit_manager/controller.php:118
+#: credit_manager/controller.php:122
+msgid "Credit Manager"
+msgstr "Credit Manager"
+
+#: credit_manager/controller.php:42
+msgid "Adds a Credit Account to every User that tracks transactions and supplies ways to transfer funds to the account."
+msgstr "Fügt jedem Benutzer ein Guthabenkonto hinzu, das Buchungen erfasst und Möglichkeiten bietet, Geld auf das Konto einzuzahlen."
+
+#: credit_manager/controller.php:120
+msgid "Products"
+msgstr "Produkte"
+
+#: credit_manager/controller.php:125
+msgid "Kontostand"
+msgstr "Kontostand"
+
+#: credit_manager/controller.php:127
+msgid "POS"
+msgstr "Kasse"
+
+#: credit_manager/controller.php:129
+msgid "Self-Service POS"
+msgstr "Selbstbedienungskasse"
+
+#: credit_manager/controller.php:131
+msgid "Order Management"
+msgstr "Bestellverwaltung"
+
+#: credit_manager/controller.php:158
+msgid "The default Group for Credit Manager Administration"
+msgstr "Die Standardgruppe für die Credit-Manager-Verwaltung"
+
+#: credit_manager/single_pages/user_balance.php:5
+#: credit_manager/views/dialogs/history.php:5
+msgid "Balance"
+msgstr "Kontostand"
+
+#: credit_manager/single_pages/user_balance.php:25
+msgid "Transaction History"
+msgstr "Buchungsverlauf"
+
+#: credit_manager/single_pages/balance.php:22
+#: credit_manager/blocks/credit_history/view.php:8
+msgid "Latest Transactions"
+msgstr "Letzte Buchungen"
+
+#: credit_manager/views/dialogs/bulk_add_record.php:7
+msgid "Group"
+msgstr "Gruppe"
+
+#: credit_manager/views/dialogs/bulk_add_record.php:10
+msgid "The transaction will be added to every user in the selected group."
+msgstr "Die Buchung wird jedem Benutzer in der gewählten Gruppe hinzugefügt."
+
+#: credit_manager/views/dialogs/bulk_add_record.php:15
+#: credit_manager/views/dialogs/add_record.php:7
+msgid "Add/ Subtract Value"
+msgstr "Betrag hinzufügen/abziehen"
+
+#: credit_manager/views/dialogs/bulk_add_record.php:17
+#: credit_manager/views/dialogs/add_record.php:9
+msgid "Positive Values add to the balance, negative values substract from it."
+msgstr "Positive Beträge erhöhen den Kontostand, negative verringern ihn."
+
+#: credit_manager/views/dialogs/bulk_add_record.php:20
+#: credit_manager/views/dialogs/history.php:12
+#: credit_manager/views/dialogs/add_record.php:16
+#: credit_manager/blocks/credit_history/complete.php:10
+msgid "Comment"
+msgstr "Kommentar"
+
+#: credit_manager/views/dialogs/bulk_add_record.php:27
+#: credit_manager/views/dialogs/add_record.php:24
+#: credit_manager/views/dialogs/add_product.php:34
+msgid "Confirm"
+msgstr "Bestätigen"
+
+#: credit_manager/views/dialogs/bulk_add_record.php:28
+#: credit_manager/views/dialogs/add_record.php:25
+#: credit_manager/views/dialogs/add_product.php:35
+msgid "Cancel"
+msgstr "Abbrechen"
+
+#: credit_manager/views/dialogs/bulk_add_record.php:40
+#, php-format
+msgid "%s users affected."
+msgstr "%s Benutzer betroffen."
+
+#: credit_manager/views/dialogs/bulk_add_record.php:47
+#, php-format
+msgid "Book %1$s for %2$s users?"
+msgstr "%1$s für %2$s Benutzer buchen?"
+
+#: credit_manager/views/dialogs/history.php:6
+#, php-format
+msgid "%d records"
+msgstr "%d Buchungen"
+
+#: credit_manager/views/dialogs/history.php:6
+#, php-format
+msgid "newest %d shown"
+msgstr "neueste %d angezeigt"
+
+#: credit_manager/views/dialogs/history.php:11
+#: credit_manager/blocks/credit_history/complete.php:9
+msgid "Date/ Time"
+msgstr "Datum/Zeit"
+
+#: credit_manager/views/dialogs/history.php:13
+msgid "Kategorien"
+msgstr "Kategorien"
+
+#: credit_manager/views/dialogs/history.php:14
+msgid "Source"
+msgstr "Quelle"
+
+#: credit_manager/views/dialogs/history.php:15
+#: credit_manager/blocks/credit_history/complete.php:11
+msgid "Value"
+msgstr "Betrag"
+
+#: credit_manager/views/dialogs/add_record.php:12
+msgid "Category"
+msgstr "Kategorie"
+
+#: credit_manager/views/dialogs/add_product.php:6
+msgid "Produktname"
+msgstr "Produktname"
+
+#: credit_manager/views/dialogs/add_product.php:10
+msgid "Preis"
+msgstr "Preis"
+
+#: credit_manager/views/dialogs/add_product.php:14
+msgid "Self-Service Item"
+msgstr "Selbstbedienungsartikel"
+
+#: credit_manager/views/dialogs/add_product.php:17
+msgid "Order Item"
+msgstr "Bestellartikel"
+
+#: credit_manager/views/dialogs/add_product.php:20
+msgid "Categories"
+msgstr "Kategorien"
+
+#: credit_manager/views/dialogs/add_product.php:27
+msgid "Image"
+msgstr "Bild"
+
+#: credit_manager/views/dialogs/add_product.php:28
+msgid "Choose Image"
+msgstr "Bild auswählen"
+
+#: credit_manager/src/Migration/StoreMigration.php:492
+msgid "Archived credit_manager bookings"
+msgstr "Archivierte credit_manager-Buchungen"
+
+#: credit_manager/blocks/shop/form.php:8
+msgid "Nächstes Catering"
+msgstr "Nächstes Catering"
+
+#: credit_manager/blocks/shop/form.php:18
+msgid "Product Group"
+msgstr "Produktgruppe"
+
+#: credit_manager/blocks/shop/controller.php:42
+msgid "Shop"
+msgstr "Shop"
+
+#: credit_manager/blocks/shop/controller.php:56
+msgid "Keine"
+msgstr "Keine"
+
+#: credit_manager/blocks/shop/controller.php:126
+#: credit_manager/controllers/single_page/order_management.php:106
+msgid "Kein Produkt"
+msgstr "Kein Produkt"
+
+#: credit_manager/blocks/shop/controller.php:131
+msgid "Offen"
+msgstr "Offen"
+
+#: credit_manager/controllers/dialog/bulk_add_record.php:66
+#, php-format
+msgid "%d records added"
+msgstr "%d Buchungen hinzugefügt"
+
+#: credit_manager/controllers/dialog/bulk_add_record.php:68
+#, php-format
+msgid "(%d already booked by this batch)"
+msgstr "(%d bereits durch diesen Stapel gebucht)"
+
+#: credit_manager/controllers/dialog/bulk_add_record.php:85
+#: credit_manager/controllers/dialog/add_record.php:56
+#: credit_manager/controllers/dialog/add_product.php:100
+msgid "Invalid Request, token must be valid."
+msgstr "Ungültige Anfrage, das Token muss gültig sein."
+
+#: credit_manager/controllers/dialog/bulk_add_record.php:88
+#: credit_manager/controllers/dialog/add_record.php:59
+#: credit_manager/controllers/dialog/add_product.php:103
+msgid "Access Denied"
+msgstr "Zugriff verweigert"
+
+#: credit_manager/controllers/dialog/bulk_add_record.php:93
+#: credit_manager/controllers/dialog/add_record.php:64
+msgid "No valid Record Value set."
+msgstr "Kein gültiger Buchungsbetrag angegeben."
+
+#: credit_manager/controllers/dialog/bulk_add_record.php:96
+#: credit_manager/controllers/dialog/add_record.php:67
+msgid "You need to set a comment for the Record."
+msgstr "Du musst einen Kommentar für die Buchung angeben."
+
+#: credit_manager/controllers/dialog/bulk_add_record.php:99
+msgid "You need to select a group."
+msgstr "Du musst eine Gruppe auswählen."
+
+#: credit_manager/controllers/dialog/bulk_add_record.php:102
+msgid "Missing batch id, please reopen the dialog."
+msgstr "Stapel-ID fehlt, bitte öffne den Dialog erneut."
+
+#: credit_manager/controllers/dialog/add_record.php:41
+#, php-format
+msgid "Record %s added for user %d"
+msgstr "Buchung %s für Benutzer %d hinzugefügt"
+
+#: credit_manager/controllers/dialog/add_record.php:71
+msgid "Unknown user."
+msgstr "Unbekannter Benutzer."
+
+#: credit_manager/controllers/dialog/add_product.php:85
+msgid "Product Saved"
+msgstr "Produkt gespeichert"
+
+#: credit_manager/controllers/dialog/add_product.php:107
+msgid "The product needs a name."
+msgstr "Das Produkt braucht einen Namen."
+
+#: credit_manager/controllers/dialog/add_product.php:110
+msgid "The product price must be a number."
+msgstr "Der Produktpreis muss eine Zahl sein."
+
+#: credit_manager/controllers/single_page/user_balance.php:27
+msgid "Credit"
+msgstr "Guthaben"
+
+#: credit_manager/controllers/single_page/user_balance.php:29
+msgid "Debt"
+msgstr "Schulden"
+
+#: credit_manager/controllers/single_page/order_management.php:190
+msgid "Produkt"
+msgstr "Produkt"
+
+#: credit_manager/single_pages/dashboard/credit_manager.php:26
+#: credit_manager/single_pages/dashboard/credit_manager.php:46
+#: credit_manager/single_pages/dashboard/credit_manager/credit_manager.php:27
+#: credit_manager/single_pages/dashboard/credit_manager/credit_manager.php:47
+msgid "Search"
+msgstr "Suchen"
+
+#: credit_manager/single_pages/dashboard/credit_manager.php:30
+#: credit_manager/single_pages/dashboard/credit_manager/credit_manager.php:31
+msgid "Keywords"
+msgstr "Suchbegriffe"
+
+#: credit_manager/single_pages/dashboard/credit_manager.php:37
+#: credit_manager/single_pages/dashboard/credit_manager/credit_manager.php:38
+msgid "Gruppenfilter"
+msgstr "Gruppenfilter"
+
+#: credit_manager/single_pages/dashboard/credit_manager.php:75
+#: credit_manager/single_pages/dashboard/credit_manager/credit_manager.php:76
+msgid "Add Record"
+msgstr "Buchung hinzufügen"
+
+#: credit_manager/single_pages/dashboard/credit_manager.php:76
+#: credit_manager/single_pages/dashboard/credit_manager/credit_manager.php:77
+msgid "Show History"
+msgstr "Verlauf anzeigen"
+
+#: credit_manager/blocks/credit_balance/controller.php:22
+msgid "Display the Currently signed in User's Credit Manager Balance."
+msgstr "Zeigt den Credit-Manager-Kontostand des angemeldeten Benutzers an."
+
+#: credit_manager/blocks/credit_balance/controller.php:27
+msgid "Credit Manager Balance"
+msgstr "Credit-Manager-Kontostand"
+
+#: credit_manager/blocks/credit_balance/controller.php:46
+msgid "Online payment is currently unavailable."
+msgstr "Online-Zahlung ist derzeit nicht verfügbar."
+
+#: credit_manager/blocks/credit_history/controller.php:24
+msgid "Display the Currently signed in User's Transaction History."
+msgstr "Zeigt den Buchungsverlauf des angemeldeten Benutzers an."
+
+#: credit_manager/blocks/credit_history/controller.php:29
+msgid "Credit Manager User History"
+msgstr "Credit-Manager-Buchungsverlauf"
+
+#: credit_manager/controllers/single_page/dashboard/credit_manager/products.php:32
+msgid "Invalid request token."
+msgstr "Ungültiges Anfrage-Token."
+
+#: credit_manager/controllers/single_page/dashboard/credit_manager/products.php:38
+msgid "Product not found."
+msgstr "Produkt nicht gefunden."
+
+#: credit_manager/controllers/single_page/dashboard/credit_manager/products.php:43
+#, php-format
+msgid "The product is referenced by %d order positions and cannot be deleted."
+msgstr "Das Produkt wird von %d Bestellpositionen verwendet und kann nicht gelöscht werden."
+
+#: credit_manager/controllers/single_page/dashboard/credit_manager/products.php:53
+msgid "Product Removed"
+msgstr "Produkt entfernt"
+
+#: credit_manager/single_pages/dashboard/credit_manager/products.php:7
+msgid "Add Product"
+msgstr "Produkt hinzufügen"
+
+#: credit_manager/single_pages/dashboard/credit_manager/products.php:50
+msgid "Delete this product?"
+msgstr "Dieses Produkt löschen?"
+
+#: credit_manager/single_pages/dashboard/credit_manager/credit_manager.php:6
+msgid "Bulk Add Transactions"
+msgstr "Sammelbuchung"

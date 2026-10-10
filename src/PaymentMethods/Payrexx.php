@@ -220,8 +220,8 @@ class Payrexx
         $gateway->setPsp([]);
         if ($ui) {
             $gateway->addField('email', $ui->getUserEmail());
-            $gateway->addField('forename', (string) $ui->getAttribute('user_firstname'));
-            $gateway->addField('surname', (string) $ui->getAttribute('user_lastname'));
+            $gateway->addField('forename', (string) $ui->getAttribute('billing_first_name'));
+            $gateway->addField('surname', (string) $ui->getAttribute('billing_last_name'));
         }
         $gw = self::client()->create($gateway);
         return $gw ? (string) $gw->getLink() : '';
